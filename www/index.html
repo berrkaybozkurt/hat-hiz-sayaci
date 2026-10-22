@@ -29,6 +29,7 @@
 }
 *{box-sizing:border-box}
 [hidden]{display:none!important}
+.probe{position:fixed;left:0;bottom:0;width:8px;height:8px;opacity:.01;pointer-events:none;z-index:-1}
 body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
   padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
 .wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
@@ -172,7 +173,7 @@ details[open] summary{margin-bottom:10px}
     <div class="stage"><canvas id="preview" width="640" height="360" aria-label="Video önizleme ve sayım bölgesi"></canvas></div>
     <p class="hint">Sayım bölgesini çizmek için görüntü üzerinde parmağınızla sürükleyin. Bölge, ürünlerin arasında boşluk görünen dar bir şerit olsun.</p>
     <p class="src-name" id="srcName">Simülasyon: 3 dk, nominal 60 adet/dk, üç duruşlu hat</p>
-    <video id="vid" muted playsinline preload="auto" hidden></video>
+    <video id="vid" class="probe" muted playsinline webkit-playsinline preload="auto"></video>
   </section>
 
   <section class="panel" aria-labelledby="h-ayar">
@@ -181,20 +182,36 @@ details[open] summary{margin-bottom:10px}
       <div class="field">
         <label for="nominal">Nominal hız</label>
         <input id="nominal" type="number" inputmode="decimal" min="1" step="1" value="60">
-        <small>adet / dakika · <b id="cycleOut">1,0 sn</b> / ürün</small>
+        <small>adet / dakika · <b id="cycleOut">1,0 sn</b> / sayım</small>
+      </div>
+      <div class="field">
+        <label for="perCount">Bir sayımda ürün</label>
+        <input id="perCount" type="number" inputmode="numeric" min="1" step="1" value="1">
+        <small>geçen her nesne kaç ürün (ör. strok başına 4 blister)</small>
       </div>
       <div class="field">
         <label for="stopMul">Duruş eşiği</label>
         <input id="stopMul" type="number" inputmode="decimal" min="1" step="0.5" value="3">
-        <small>çevrim · <b id="thrOut">3,0 sn</b> ürün gelmezse duruş</small>
+        <small>çevrim · <b id="thrOut">3,0 sn</b> sayım gelmezse duruş</small>
       </div>
       <div class="field">
         <label for="rate">Analiz hızı</label>
         <select id="rate">
-          <option value="1">1× hassas</option>
-          <option value="2">2×</option>
+          <option value="1">1× (30 kare/sn video)</option>
+          <option value="0.5">½× (60 kare/sn video)</option>
+          <option value="0.25">¼× (120 kare/sn ağır çekim)</option>
+          <option value="0.125">⅛× (240 kare/sn ağır çekim)</option>
         </select>
-        <small>video oynatılarak okunur</small>
+        <small id="fpsInfo">video yüklenince otomatik seçilir</small>
+      </div>
+      <div class="field">
+        <label for="tscale">Video zamanı</label>
+        <select id="tscale">
+          <option value="1">Gerçek zamanlı</option>
+          <option value="4">Ağır çekim, 4× yavaşlatılmış</option>
+          <option value="8">Ağır çekim, 8× yavaşlatılmış</option>
+        </select>
+        <small>ağır çekim video normal hızda oynarken yavaşsa seçin</small>
       </div>
     </div>
     <div class="btn-row"><button class="btn primary" id="analyzeBtn" type="button">Analiz et</button><button class="btn" id="cancelBtn" type="button" hidden>Durdur</button></div>
@@ -332,12 +349,24 @@ const pct = v => `%${nf1.format(v*100)}`;
 function toast(msg){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2200); }
 function params(){
   const V = Math.max(1, parseFloat($('nominal').value) || 60);
+  const per = Math.max(1, parseInt($('perCount').value,10) || 1);
   const mul = Math.max(1, parseFloat($('stopMul').value) || 3);
-  const cycle = 60/V, thr = mul*cycle;
+  const cycle = 60/V, ec = cycle*per, thr = mul*ec;
   const k = parseInt($('sens').value,10)/100;
-  return {V, mul, cycle, thr, k};
+  return {V, per, mul, cycle, ec, thr, k};
 }
-function showParams(){ const p = params(); $('cycleOut').textContent = `${nf1.format(p.cycle)} sn`; $('thrOut').textContent = `${nf1.format(p.thr)} sn`; }
+function fsec(v){ return v < 1 ? new Intl.NumberFormat('tr-TR',{maximumFractionDigits:3}).format(v) : nf1.format(v); }
+function needFps(){ const p = params(); return 3/p.ec; }
+function showParams(){
+  const p = params(); $('cycleOut').textContent = `${fsec(p.ec)} sn`; $('thrOut').textContent = `${fsec(p.thr)} sn`;
+  updateFpsInfo();
+}
+function updateFpsInfo(){
+  const need = needFps(), el = $('fpsInfo'); if (!el) return;
+  const src = S.srcFps ? `Video ${Math.round(S.srcFps)} kare/sn · ` : '';
+  const warn = S.srcFps && S.srcFps < need*0.95;
+  el.innerHTML = `${src}bu hız için en az <b>${Math.ceil(need)}</b> kare/sn gerekli${warn ? ' · <b style="color:var(--stop)">yetersiz, ağır çekim çekin</b>' : ''}`;
+}
 
 // ---------- comment persistence (this browser only) ----------
 function saveComments(){
@@ -439,6 +468,7 @@ function sample(src, sw, sh, t){
   const d = sctx.getImageData(0,0,G,G).data, g = new Uint8Array(G*G);
   for (let i=0,j=0;i<g.length;i++,j+=4) g[i] = (d[j]*77 + d[j+1]*150 + d[j+2]*29) >> 8;
   S.frames.push(g); S.times.push(t);
+  return g;
 }
 // Two-state model: cluster ROI frames into "product present" vs "gap" (k-means, k=2)
 function computeSignal(){
@@ -460,18 +490,20 @@ function computeSignal(){
   for (let i=0;i<n;i++){ const a=Math.sqrt(d2(F[i],c1)), b=Math.sqrt(d2(F[i],c2)); sig[i] = (a+b)>0 ? a/(a+b) : 0.5; }
   const sm = new Float32Array(n);
   for (let i=0;i<n;i++){ const a=sig[Math.max(0,i-1)], b=sig[i], c=sig[Math.min(n-1,i+1)]; sm[i] = Math.max(Math.min(a,b), Math.min(Math.max(a,b),c)); }
-  S.smooth = sm; S.nSig = n;
+  S.smooth = sm; S.raw = sig; S.nSig = n;
   return true;
 }
 
 // ---------- analysis (instant, from stored signal) ----------
 function analyze(){
-  const {V, cycle, thr, k} = params();
-  const sm = S.smooth, n = sm ? sm.length : 0, ts = S.times, T = S.duration;
+  const {V, per, cycle, ec, thr, k} = params();
+  const ts = S.times, T = S.duration, n0 = S.smooth ? S.smooth.length : 0;
+  const spc0 = n0 / Math.max(T,0.001) * ec;
+  const sm = spc0 < 6 ? S.raw : S.smooth, n = n0; // fast lines: no smoothing, it would erase 1–2 frame pulses
   if (!n) return null;
   const sorted = Array.from(sm).sort((a,b)=>a-b);
   const lo = sorted[Math.floor(n*0.02)], hi = sorted[Math.min(n-1,Math.floor(n*0.98))], range = hi-lo;
-  const minGap = cycle*0.5, hiT = lo + k*range, loT = lo + Math.max(0.05, k-0.2)*range;
+  const minGap = ec*0.5, hiT = lo + k*range, loT = lo + Math.max(0.05, k-0.2)*range;
   const counts = [];
   const ok = S.sep >= 5 && range > 0.15;
   if (ok){
@@ -484,10 +516,10 @@ function analyze(){
   const stops = []; let prev = 0;
   for (const c of counts.concat([T])){ if (c - prev > thr) stops.push({start:prev, end:c, dur:c-prev}); prev = c; }
   if (stops.length && S.scanning) stops[stops.length-1].open = stops[stops.length-1].end === T;
-  const stopT = stops.reduce((a,s)=>a+s.dur,0), runT = Math.max(0, T-stopT), N = counts.length;
+  const stopT = stops.reduce((a,s)=>a+s.dur,0), runT = Math.max(0, T-stopT), N = counts.length*per;
   const speed = runT>0 ? N/(runT/60) : 0;
-  const fps = n / Math.max(T,0.001), spc = fps*cycle;
-  return {ok, V, cycle, thr, k, counts, stops, stopT, runT, N, speed, T, hiT, loT, lo, hi, range, fps, spc};
+  const fps = n / Math.max(T,0.001), spc = fps*ec;
+  return {ok, V, per, ec, sig: sm, cycle, thr, k, counts, stops, stopT, runT, N, speed, T, hiT, loT, lo, hi, range, fps, spc};
 }
 
 // match comments to detected stops by time overlap (survives re-analysis)
@@ -532,7 +564,7 @@ function render(){
   $('tCount').textContent = nf0.format(R.N);
   let msg = '';
   if (!R.ok) msg = 'Sayım bölgesinde değişim görülmedi. Bölgeyi ürünlerin geçtiği yere çizip tekrar analiz edin.';
-  else if (R.spc < 4) msg = `Her ürün için yalnızca ${nf1.format(R.spc)} kare okunabildi. Sayım kaçabilir; analiz hızını 1× yapın.`;
+  else if (R.spc < 3) msg = `Her sayım için yalnızca ${nf1.format(R.spc)} kare okunabildi (okunan ${Math.round(R.fps)} kare/sn, gereken en az ${Math.ceil(3/R.ec)}). Sayım kaçar. Ağır çekim (120/240 kare/sn) çekip analiz hızını ¼× ya da ⅛× yapın, veya strok gibi daha yavaş bir hareketi sayıp “Bir sayımda ürün” alanını kullanın.`;
   else if (R.runT > 0 && R.N*R.cycle > R.runT*1.15) msg = 'Gerçek hız nominalin çok üstünde. Çift sayım olabilir; hassasiyeti yükseltin ya da nominal hızı kontrol edin.';
   $('warnNote').textContent = msg; $('warnNote').hidden = !msg;
   $('staleNote').hidden = !S.stale;
@@ -656,7 +688,7 @@ function renderSpeedChart(R){
   const W=chartW('speedChart'), H=Math.round(W*0.42)+40, ml=40, mr=12, mt=12, mb=28, iw=W-ml-mr, ih=H-mt-mb;
   const b = Math.max(5, Math.ceil(R.T/(W<500?30:45)/5)*5), nb = Math.max(1, Math.ceil(R.T/b));
   const rates = new Array(nb).fill(0);
-  for (const c of R.counts) rates[Math.min(nb-1, Math.floor(c/b))]++;
+  for (const c of R.counts) rates[Math.min(nb-1, Math.floor(c/b))] += R.per;
   for (let i=0;i<nb;i++){ const len = Math.min(b, R.T - i*b); rates[i] = len>0 ? rates[i]/len*60 : 0; }
   const ymax0 = Math.max(R.V*1.15, ...rates), st = niceStep(ymax0), ymax = Math.ceil(ymax0/st)*st;
   const x = t => ml + t/R.T*iw, y = v => mt + ih - v/ymax*ih;
@@ -675,8 +707,8 @@ function renderSpeedChart(R){
 function renderSignal(R){
   if (!$('sigChart').closest('details').open) return;
   const W=chartW('sigChart'), H=Math.round(W*0.36)+30, ml=20, mr=20, mt=10, mb=24, iw=W-ml-mr, ih=H-mt-mb;
-  const wl = Math.min(R.T, 15) || 1, t0 = Math.min(+$('win').value || 0, Math.max(0,R.T-wl)), t1 = t0 + wl;
-  const ts = S.times, sm = S.smooth;
+  const wl = Math.min(R.T, Math.max(2, Math.min(15, R.ec*40))) || 1, t0 = Math.min(+$('win').value || 0, Math.max(0,R.T-wl)), t1 = t0 + wl;
+  const ts = S.times, sm = R.sig;
   const x = t => ml + (t-t0)/(t1-t0)*iw, y = v => mt + ih - Math.min(v,1)*ih;
   let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sayım bölgesi sinyali">`;
   for (const sp of R.stops){ if (sp.end<t0||sp.start>t1) continue; const a=Math.max(t0,sp.start), b=Math.min(t1,sp.end); s += `<rect x="${x(a).toFixed(1)}" y="${mt}" width="${(x(b)-x(a)).toFixed(1)}" height="${ih}" fill="var(--stop-soft)"/>`; }
@@ -717,31 +749,45 @@ function scanDemo(){
 const vid = $('vid');
 let wakeLock = null;
 async function keepAwake(on){ try { if (on && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); else if (!on && wakeLock){ await wakeLock.release(); wakeLock = null; } } catch(e){} }
-function seekTo(t){ return new Promise(res => { const h = () => { vid.removeEventListener('seeked', h); res(); }; vid.addEventListener('seeked', h); vid.currentTime = t; }); }
+function seekTo(t){ return new Promise(res => { let ok = false; const h = () => { if (ok) return; ok = true; vid.removeEventListener('seeked', h); res(); }; vid.addEventListener('seeked', h); setTimeout(h, 4000); try { vid.currentTime = t; } catch(e){ h(); } }); }
+const tsc = () => S.tscale || 1; // slow-motion files saved at 30 fps stretch time: real = media / tsc
+const VIDEO_FAIL = 'Video kareleri okunamıyor. Telefonun kamera ayarlarında video formatını HEVC yerine H.264 (“Yüksek uyumluluk”) yapıp yeniden çekin, sonra tekrar deneyin.';
 function scanVideo(){
   return new Promise(async resolve => {
     resetScan();
-    const dur = vid.duration, sw = vid.videoWidth, sh = vid.videoHeight;
-    S.totalDur = dur;
+    const dur = vid.duration, sw = vid.videoWidth, sh = vid.videoHeight, sc = tsc();
+    if (!sw || !sh){ setProgress(0, VIDEO_FAIL, true); resolve(false); return; }
+    S.totalDur = dur/sc;
     await seekTo(0);
     vid.playbackRate = parseFloat($('rate').value) || 1;
-    let lastT = -1, frameNo = 0, done = false;
-    const finish = ok => { if (done) return; done = true; vid.pause(); if (ok) S.duration = S.times.length ? Math.max(dur||0, S.times[S.times.length-1]) : 0; resolve(ok); };
-    const take = t => {
-      if (t <= lastT) return; lastT = t;
-      sample(vid, sw, sh, t); frameNo++;
-      if (frameNo % 4 === 0){ drawPreview(vid); setProgress(t/dur, `Okunuyor… ${fmt(t)} / ${fmt(dur)} · ${S.times.length} kare`); }
+    let lastT = -1, frameNo = 0, done = false, bright = 0, lastAt = performance.now(), useRVFC = 'requestVideoFrameCallback' in vid;
+    const finish = (ok, err) => {
+      if (done) return; done = true; clearInterval(wd); vid.pause();
+      if (ok && bright < 3){ ok = false; err = VIDEO_FAIL; }
+      if (err) setProgress(0, err, true);
+      if (ok) S.duration = S.times.length ? Math.max(dur/sc, S.times[S.times.length-1]) : 0;
+      resolve(ok);
+    };
+    const take = mt => {
+      if (mt <= lastT) return; lastT = mt; lastAt = performance.now();
+      const t = mt/sc, g = sample(vid, sw, sh, t); frameNo++;
+      if (frameNo < 60){ let m = 0; for (let i=0;i<g.length;i+=8) m += g[i]; bright = Math.max(bright, m/(g.length/8)); }
+      if (frameNo % 4 === 0){ drawPreview(vid); setProgress(mt/dur, `Okunuyor… ${fmt(t)} / ${fmt(dur/sc)} · ${S.times.length} kare`); }
       liveUpdate(t, false);
     };
+    const rafLoop = () => { if (done || useRVFC) return; if (S.cancel){ finish(false); return; } if (!vid.paused) take(vid.currentTime); requestAnimationFrame(rafLoop); };
+    const cb = (now, meta) => { if (done || !useRVFC) return; if (S.cancel){ finish(false); return; } take(meta.mediaTime); vid.requestVideoFrameCallback(cb); };
+    // watchdog: some Android WebViews never fire frame callbacks; fall back, then report clearly
+    const wd = setInterval(() => {
+      if (done) return;
+      if (S.cancel){ finish(false); return; }
+      const idle = performance.now() - lastAt;
+      if (useRVFC && idle > 2500){ useRVFC = false; rafLoop(); }
+      if (idle > 9000) finish(false, vid.paused && vid.currentTime === 0 ? 'Video oynatılamadı. Uygulamayı kapatıp açın ve tekrar deneyin.' : VIDEO_FAIL);
+    }, 500);
     vid.onended = () => finish(true);
-    if ('requestVideoFrameCallback' in vid){
-      const cb = (now, meta) => { if (done) return; if (S.cancel){ finish(false); return; } take(meta.mediaTime); vid.requestVideoFrameCallback(cb); };
-      vid.requestVideoFrameCallback(cb);
-    } else {
-      const loop = () => { if (done) return; if (S.cancel){ finish(false); return; } take(vid.currentTime); requestAnimationFrame(loop); };
-      requestAnimationFrame(loop);
-    }
-    try { await vid.play(); } catch(e){ setProgress(0, 'Video oynatılamadı. Farklı bir video deneyin.', true); finish(false); }
+    if (useRVFC) vid.requestVideoFrameCallback(cb); else rafLoop();
+    try { await vid.play(); } catch(e){ finish(false, 'Video oynatılamadı: ' + (e && e.name || 'bilinmeyen hata') + '. Farklı bir video deneyin.'); }
   });
 }
 async function runAnalysis(){
@@ -775,32 +821,65 @@ function resetComments(key, seed){
 
 // ---------- loading a video ----------
 let objUrl = null;
+async function probeFps(){
+  if (!('requestVideoFrameCallback' in vid)) return 0;
+  const times = []; let stop = false;
+  const cb = (now, m) => { times.push(m.mediaTime); if (!stop) vid.requestVideoFrameCallback(cb); };
+  vid.requestVideoFrameCallback(cb);
+  vid.playbackRate = 0.125;
+  try { await vid.play(); } catch(e){ return 0; }
+  await new Promise(r => setTimeout(r, 1800));
+  stop = true; vid.pause();
+  const d = []; for (let i=1;i<times.length;i++){ const x = times[i]-times[i-1]; if (x > 0.0005) d.push(x); }
+  if (d.length < 3) return 0;
+  d.sort((a,b)=>a-b); return 1/d[Math.floor(d.length/2)];
+}
+function pickRate(mediaFps){
+  // keep frames delivered per wall-second under ~50 so no frame is skipped on a 60 Hz screen
+  const opts = [1, 0.5, 0.25, 0.125]; let r = 0.125;
+  for (const o of opts){ if (mediaFps*o <= 50){ r = o; break; } }
+  $('rate').value = String(r);
+}
 function loadFile(file){
   if (!file) return;
   if (S.scanning) S.cancel = true;
+  pausePlayer();
   if (objUrl) URL.revokeObjectURL(objUrl);
   objUrl = URL.createObjectURL(file);
-  S.fileName = file.name || 'video';
+  S.fileName = file.name || 'video'; S.srcFps = 0; S.mediaFps = 0;
   setProgress(0, 'Video yükleniyor…');
+  let loaded = false;
+  const to = setTimeout(() => { if (!loaded) setProgress(0, 'Video açılamadı (zaman aşımı). ' + VIDEO_FAIL, true); }, 12000);
   vid.onloadedmetadata = async () => {
+    loaded = true; clearTimeout(to);
+    if (!vid.videoWidth){ setProgress(0, VIDEO_FAIL, true); return; }
     S.source = 'video';
     sizePreview(vid.videoWidth, vid.videoHeight);
+    $('srcBadge').hidden = true;
+    resetComments(`${S.fileName}|${Math.round(vid.duration)}`, null);
+    setProgress(0, 'Video kontrol ediliyor…');
+    const f = await probeFps();
+    S.mediaFps = f; S.srcFps = f * tsc();
+    if (f) pickRate(f);
     try { await seekTo(Math.min(0.2, (vid.duration||1)/2)); } catch(e){}
     drawPreview(vid);
-    $('srcBadge').hidden = true;
-    $('srcName').textContent = `${S.fileName} · ${fmt(vid.duration)} · ${vid.videoWidth}×${vid.videoHeight}`;
-    resetComments(`${S.fileName}|${Math.round(vid.duration)}`, null);
+    $('srcName').textContent = `${S.fileName} · ${fmt(vid.duration/tsc())} · ${vid.videoWidth}×${vid.videoHeight}${f ? ` · ${Math.round(f)} kare/sn` : ''}`;
+    updateFpsInfo();
     S.stale = !!S.res; $('staleNote').hidden = !S.stale;
     setProgress(0, 'Hazır. Sayım bölgesini çizin, sonra “Analiz et”e basın. Şerit analiz sırasında dolar.');
   };
-  vid.onerror = () => setProgress(0, 'Bu video açılamadı. Telefonun kamerasıyla MP4 olarak çekilmiş bir video deneyin.', true);
+  vid.onerror = () => {
+    loaded = true; clearTimeout(to);
+    const code = vid.error && vid.error.code;
+    setProgress(0, code === 4 ? 'Bu video formatı telefonda çözülemiyor (büyük olasılıkla HEVC/H.265). ' + VIDEO_FAIL : 'Bu video açılamadı. ' + VIDEO_FAIL, true);
+  };
   vid.src = objUrl; vid.load();
 }
 $('camInput').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value=''; });
 $('fileInput').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value=''; });
 async function startDemo(){
   if (S.scanning) return;
-  S.source='demo'; S.roi={x:0.60,y:0.36,w:0.05,h:0.34}; S.isExample = true;
+  S.source='demo'; S.roi={x:0.60,y:0.36,w:0.05,h:0.34}; S.isExample = true; S.tscale = 1; S.srcFps = 0; S.mediaFps = 0; $('tscale').value = '1'; $('perCount').value = 1;
   $('nominal').value=60; $('stopMul').value=3; $('sens').value=50; $('sensOut').textContent='50';
   sizePreview(DEMO.W*2, DEMO.H*2); $('srcBadge').hidden=false;
   $('srcName').textContent='Simülasyon: 3 dk, nominal 60 adet/dk, üç duruşlu hat';
@@ -817,8 +896,9 @@ async function startDemo(){
 $('demoBtn').addEventListener('click', startDemo);
 
 // ---------- live parameter changes ----------
-['nominal','stopMul'].forEach(id => $(id).addEventListener('input', () => { showParams(); if (S.smooth && !S.scanning) render(); }));
+['nominal','stopMul','perCount'].forEach(id => $(id).addEventListener('input', () => { showParams(); if (S.smooth && !S.scanning) render(); }));
 $('rejRun').addEventListener('input', () => changed());
+$('tscale').addEventListener('change', e => { S.tscale = parseFloat(e.target.value) || 1; S.srcFps = (S.mediaFps||0)*S.tscale; updateFpsInfo(); if (S.res && S.source==='video'){ S.stale = true; $('staleNote').hidden = false; } });
 $('sens').addEventListener('input', e => { $('sensOut').textContent = e.target.value; if (S.smooth && !S.scanning) render(); });
 $('win').addEventListener('input', e => { $('winOut').textContent = fmt(+e.target.value); if (S.res) renderSignal(S.res); });
 let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.res) render(); }, 150); });
@@ -850,7 +930,7 @@ function upper(arr, t){ let lo=0, hi=arr.length; while (lo<hi){ const m=(lo+hi)>
 function cumAt(t){
   const R = S.res; if (!R) return null;
   t = Math.max(0, Math.min(t, R.T));
-  const c = R.cycle, N = upper(R.counts, t);
+  const c = R.cycle, N = upper(R.counts, t)*R.per;
   let stopT = 0, rej = 0, cur = null, idx = -1;
   R.stops.forEach((st,i) => {
     if (st.start < t) stopT += Math.min(t, st.end) - st.start;
@@ -949,8 +1029,8 @@ async function playPlayer(){
     PLAY.raf = requestAnimationFrame(loop);
   } else {
     vid.playbackRate = 1; vid.onended = () => { PLAY.t = T; drawPlayer(); pausePlayer(); };
-    if (Math.abs(vid.currentTime - PLAY.t) > 0.2) await seekTo(PLAY.t);
-    const tick = (now, meta) => { if (!PLAY.playing) return; PLAY.t = meta ? meta.mediaTime : vid.currentTime; drawPlayer(); schedule(); };
+    if (Math.abs(vid.currentTime/tsc() - PLAY.t) > 0.2) await seekTo(PLAY.t*tsc());
+    const tick = (now, meta) => { if (!PLAY.playing) return; PLAY.t = (meta ? meta.mediaTime : vid.currentTime)/tsc(); drawPlayer(); schedule(); };
     const schedule = () => { if ('requestVideoFrameCallback' in vid) vid.requestVideoFrameCallback(tick); else PLAY.raf = requestAnimationFrame(() => tick(0, null)); };
     schedule();
     try { await vid.play(); } catch(e){ pausePlayer(); }
@@ -960,7 +1040,7 @@ async function seekPlayer(t){
   if (!S.res || PLAY.exporting) return;
   const was = PLAY.playing; pausePlayer();
   PLAY.t = Math.max(0, Math.min(t, S.res.T));
-  if (S.source === 'video' && vid.readyState >= 1){ await seekTo(PLAY.t); }
+  if (S.source === 'video' && vid.readyState >= 1){ await seekTo(PLAY.t*tsc()); }
   drawPlayer();
   if (was) playPlayer();
 }
@@ -999,7 +1079,7 @@ function buildWorkbook(){
   const wb = X.utils.book_new();
   const ozet = [['Metrik','Değer','Birim'],
     ['Kaynak', S.source==='demo' ? 'Simülasyon (örnek)' : S.fileName, ''],
-    ['Nominal hız', R.V, 'adet/dk'], ['Çevrim süresi', r1(R.cycle*100)/100, 'sn'], ['Duruş eşiği', r1(R.thr), 'sn'],
+    ['Nominal hız', R.V, 'adet/dk'], ['Bir sayımda ürün', R.per, 'adet'], ['Sayım çevrimi', Math.round(R.ec*1000)/1000, 'sn'], ['Duruş eşiği', r1(R.thr), 'sn'],
     ['Kayıt süresi', r1(R.T), 'sn'], ['Çalışma süresi', r1(R.runT), 'sn'], ['Duruş süresi', r1(R.stopT), 'sn'], ['Duruş sayısı', R.stops.length, 'adet'],
     ['Toplam adet', R.N, 'adet'], ['Reject', O.rej, 'adet'], ['Sağlam', O.good, 'adet'], ['Gerçek hız (çalışırken)', r1(R.speed), 'adet/dk'],
     [], ['OEE', r1(O.pOee*100), '%'], ['Hız kaybı', r1(O.pSpd*100), '%'], ['Kalite kaybı', r1(O.pQ*100), '%'], ['Duruş', r1(O.pStop*100), '%'],
@@ -1018,7 +1098,7 @@ function buildWorkbook(){
   }
   const ws3 = X.utils.aoa_to_sheet(sec); ws3['!cols'] = [{wch:8},{wch:8},{wch:11},{wch:15},{wch:16},{wch:8},{wch:12},{wch:14},{wch:9}];
   X.utils.book_append_sheet(wb, ws3, 'Saniye bazlı');
-  const urun = [['No','Zaman (sn)']]; R.counts.forEach((c,i) => urun.push([i+1, Math.round(c*100)/100]));
+  const urun = [['Sayım no','Zaman (sn)','Kümülatif ürün']]; R.counts.forEach((c,i) => urun.push([i+1, Math.round(c*1000)/1000, (i+1)*R.per]));
   X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(urun), 'Ürünler');
   return wb;
 }
@@ -1060,9 +1140,9 @@ $('videoBtn').addEventListener('click', async () => {
     vid.playbackRate = 1;
     await new Promise(async done => {
       vid.onended = done;
-      const cb = (now, meta) => { if (PLAY.cancelExport){ vid.pause(); return done(); } frame(meta.mediaTime); vid.requestVideoFrameCallback(cb); };
+      const cb = (now, meta) => { if (PLAY.cancelExport){ vid.pause(); return done(); } frame(meta.mediaTime/tsc()); vid.requestVideoFrameCallback(cb); };
       if ('requestVideoFrameCallback' in vid) vid.requestVideoFrameCallback(cb);
-      else { const loop = () => { if (PLAY.cancelExport || vid.ended){ vid.pause(); return done(); } frame(vid.currentTime); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+      else { const loop = () => { if (PLAY.cancelExport || vid.ended){ vid.pause(); return done(); } frame(vid.currentTime/tsc()); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
       try { await vid.play(); } catch(e){ done(); }
     });
   }
