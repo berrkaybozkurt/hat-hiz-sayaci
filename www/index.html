@@ -1,0 +1,1095 @@
+<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#1d5fc4">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style></head><body>
+<title>Hat Hız Sayacı</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: single-column operator tool — 1 kayıt → 2 ayar → 3 andon şeridi + duruş yorumları + OEE kırılımı */
+:root{
+  --bg:#edf0f3; --surface:#ffffff; --sunk:#f4f6f8; --ink:#17202a; --muted:#5a6675; --line:#d3d9e0;
+  --accent:#1d5fc4; --accent-ink:#ffffff; --run:#1f9450; --run-soft:#d8efe1; --stop:#d23a2e; --stop-soft:#f7dcd9;
+  --warn:#b8740f; --rej:#8b5a2b; --pending:#cfd5dc; --grid:#e2e7ed; --belt:#2b333c; --sel:#17202a;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --f-mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#11161c; --surface:#19212a; --sunk:#141a21; --ink:#e6ebf0; --muted:#97a3b1; --line:#2c3743;
+    --accent:#6ea2f2; --accent-ink:#0b1420; --run:#3fb871; --run-soft:#173526; --stop:#ec6a5f; --stop-soft:#3e1e1c;
+    --warn:#e2a64a; --rej:#c4925e; --pending:#2f3a46; --grid:#25303b; --belt:#0c1116; --sel:#ffffff; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#11161c; --surface:#19212a; --sunk:#141a21; --ink:#e6ebf0; --muted:#97a3b1; --line:#2c3743;
+  --accent:#6ea2f2; --accent-ink:#0b1420; --run:#3fb871; --run-soft:#173526; --stop:#ec6a5f; --stop-soft:#3e1e1c;
+  --warn:#e2a64a; --rej:#c4925e; --pending:#2f3a46; --grid:#25303b; --belt:#0c1116; --sel:#ffffff; color-scheme:dark;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:20px 48px}
+.wrap{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+header h1{font-family:var(--f-display);font-weight:700;font-size:2.1rem;line-height:1.05;margin:0;letter-spacing:.01em;text-wrap:balance}
+header p{margin:6px 0 0;color:var(--muted);max-width:62ch}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.step{font-family:var(--f-display);font-weight:700;font-size:1rem;color:var(--accent-ink);background:var(--accent);border-radius:4px;padding:0 7px;line-height:1.5}
+.panel-head h2{font-family:var(--f-display);font-weight:600;font-size:1.35rem;margin:0;letter-spacing:.02em}
+.badge{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--sunk);color:var(--warn);border:1px solid var(--line)}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap}
+.btn{appearance:none;border:1px solid var(--line);background:var(--sunk);color:var(--ink);font:600 .95rem var(--f-body);
+  padding:10px 14px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:8px;min-height:44px}
+.btn:hover{border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.seg:focus-visible,.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.btn svg{width:18px;height:18px;flex:none}
+.vis-hide{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.stage{position:relative;background:var(--belt);border-radius:8px;overflow:hidden;max-width:100%}
+#preview{display:block;width:100%;height:auto;touch-action:none;cursor:crosshair}
+.hint{font-size:.85rem;color:var(--muted);margin:0}
+.src-name{font-family:var(--f-mono);font-size:.82rem;color:var(--muted);overflow-wrap:anywhere;margin:0}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label,.lbl{font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.field input,.field select{font:500 1.05rem var(--f-mono);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:9px 10px;min-height:44px;width:100%}
+.field small{color:var(--muted);font-size:.8rem;font-variant-numeric:tabular-nums}
+.field small b{color:var(--ink);font-weight:600}
+.progress{height:8px;background:var(--sunk);border:1px solid var(--line);border-radius:99px;overflow:hidden}
+.progress > i{display:block;height:100%;width:0;background:var(--accent);transition:width .15s linear}
+.status{font-family:var(--f-mono);font-size:.85rem;color:var(--muted);margin:0;min-height:1.3em}
+.status.err{color:var(--stop)}
+.note{font-size:.88rem;padding:9px 12px;border-radius:7px;background:var(--sunk);border:1px solid var(--line);color:var(--warn);margin:0}
+.tiles{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+@media (min-width:620px){.tiles{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.tile{background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.tile .k{font-size:.72rem;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);font-weight:600}
+.tile .v{font-family:var(--f-display);font-weight:700;font-size:2rem;line-height:1.05;font-variant-numeric:tabular-nums}
+.tile .s{font-size:.78rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.tile.stop .v{color:var(--stop)} .tile.run .v{color:var(--run)}
+h3{font-family:var(--f-display);font-weight:600;font-size:1.15rem;letter-spacing:.03em;margin:0}
+.sub-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap}
+.sub-head span{font-size:.82rem;color:var(--muted);font-variant-numeric:tabular-nums}
+
+/* Andon strip */
+.strip{position:relative;height:54px;cursor:pointer;border-radius:6px;overflow:hidden;background:var(--pending)}
+.strip .runfill{position:absolute;left:0;top:0;bottom:0;background:var(--run);width:0}
+.seg{position:absolute;top:0;bottom:0;background:var(--stop);border:0;padding:0;margin:0;cursor:pointer;min-width:4px;
+  color:#fff;font:700 .8rem var(--f-mono);display:flex;align-items:flex-start;justify-content:center;padding-top:4px}
+.seg.done::after{content:"";position:absolute;left:50%;bottom:7px;width:7px;height:7px;margin-left:-3.5px;border-radius:50%;background:#fff}
+.seg.sel{box-shadow:inset 0 0 0 3px var(--sel)}
+.strip-axis{position:relative;height:18px;font:400 .72rem var(--f-mono);color:var(--muted)}
+.strip-axis span{position:absolute;top:2px;transform:translateX(-50%);white-space:nowrap}
+.strip-axis span:first-child{transform:none} .strip-axis span:last-child{transform:translateX(-100%)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:.8rem;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:12px;height:12px;border-radius:2px;display:inline-block}
+
+/* Stop cards */
+.cards{display:flex;flex-direction:column;gap:10px}
+.card{border:1px solid var(--line);border-left:4px solid var(--stop);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px;background:var(--surface);scroll-margin:80px}
+.card.sel{border-color:var(--sel);border-left-color:var(--stop);box-shadow:0 0 0 1px var(--sel)}
+.card.open-end{border-style:dashed;border-left-style:solid}
+.card-head{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.card-head .num{font:700 1.05rem var(--f-display);color:var(--stop)}
+.card-head .time{font-family:var(--f-mono);font-size:.9rem}
+.card-head .dur{margin-left:auto;font:600 .95rem var(--f-mono)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{appearance:none;border:1px solid var(--line);background:var(--sunk);color:var(--ink);font:600 .88rem var(--f-body);padding:6px 12px;border-radius:999px;cursor:pointer;min-height:36px}
+.chip[aria-pressed="true"][data-cat="durus"]{background:var(--stop);border-color:var(--stop);color:#fff}
+.chip[aria-pressed="true"][data-cat="reject"]{background:var(--rej);border-color:var(--rej);color:#fff}
+.seg.rej{background:var(--rej)}
+.playhead{position:absolute;top:-3px;bottom:-3px;width:3px;margin-left:-1.5px;background:var(--sel);border-radius:2px;pointer-events:none;box-shadow:0 0 0 1px var(--surface)}
+.strip-wrap{position:relative}
+#player{display:block;width:100%;height:auto;border-radius:8px;background:#141a21}
+.player-ctrl{display:flex;align-items:center;gap:10px}
+.player-ctrl input[type=range]{flex:1;min-width:0;accent-color:var(--accent);min-height:36px}
+.player-ctrl output{font:500 .85rem var(--f-mono);white-space:nowrap}
+.exp-status{font:400 .85rem var(--f-mono);color:var(--muted);margin:0}
+.chip[aria-pressed="true"][data-cat="diger"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.rej-row{display:flex;align-items:center;gap:8px}
+.rej-row label{font-size:.85rem;color:var(--muted)}
+.rej-row input{width:96px;font:500 1rem var(--f-mono);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:7px 9px;min-height:40px}
+.card textarea{width:100%;min-height:58px;resize:vertical;font:400 .95rem var(--f-body);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:7px;padding:8px 10px}
+.empty{color:var(--muted);font-size:.9rem;margin:0}
+
+/* OEE block */
+.oee{display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:14px}
+.oee-top{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+.oee-main .k{font-size:.78rem;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600}
+.oee-main .v{font-family:var(--f-display);font-weight:700;font-size:3.4rem;line-height:.95;color:var(--run);font-variant-numeric:tabular-nums}
+.factors{display:flex;gap:14px;flex-wrap:wrap;font:500 .88rem var(--f-mono);color:var(--muted);padding-bottom:4px}
+.factors b{color:var(--ink);font-weight:600}
+.lossbar{display:flex;height:22px;border-radius:5px;overflow:hidden;background:var(--pending)}
+.lossbar i{display:block;height:100%}
+.loss-list{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 14px}
+@media (min-width:620px){.loss-list{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.loss-list li{display:flex;flex-direction:column;min-width:0;padding-left:10px;border-left:4px solid var(--c)}
+.loss-list .k{font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600}
+.loss-list .v{font:700 1.5rem var(--f-display);font-variant-numeric:tabular-nums;line-height:1.1}
+.loss-list .s{font:400 .78rem var(--f-mono);color:var(--muted)}
+.cat-break{display:flex;gap:8px;flex-wrap:wrap;font-size:.82rem}
+.cat-break span{background:var(--sunk);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font-variant-numeric:tabular-nums}
+
+.chart-box{overflow-x:auto}
+.chart-box svg{display:block;width:100%;height:auto}
+.range-row{display:flex;align-items:center;gap:10px}
+.range-row input[type=range]{flex:1;accent-color:var(--accent);min-height:32px}
+.range-row output{font-family:var(--f-mono);font-size:.9rem;min-width:4.5ch;text-align:right}
+details{border-top:1px solid var(--line);padding-top:12px}
+summary{cursor:pointer;font-family:var(--f-display);font-weight:600;font-size:1.1rem;letter-spacing:.03em}
+details[open] summary{margin-bottom:10px}
+.inner{display:flex;flex-direction:column;gap:10px}
+.method{margin:0;padding-left:1.2em;color:var(--muted);font-size:.9rem;display:flex;flex-direction:column;gap:4px;max-width:65ch}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(18px + env(safe-area-inset-bottom,0px));background:var(--ink);color:var(--bg);padding:8px 14px;border-radius:8px;font-size:.9rem;z-index:20}
+@media (prefers-reduced-motion:reduce){.progress > i{transition:none}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Hat Hız Sayacı</h1>
+    <p>Hattın videosunu çekin, ürünlerin geçtiği yere bir sayım bölgesi çizin. Araç adedi sayar, ürün gelmeyen süreleri kırmızı duruş olarak işaretler. Kırmızı kısımlara yorumunuzu yazın, OEE kırılımı hesaplansın.</p>
+  </header>
+
+  <section class="panel" aria-labelledby="h-kayit">
+    <div class="panel-head"><span class="step">1</span><h2 id="h-kayit">Kayıt</h2><span class="badge" id="srcBadge">Örnek kayıt</span></div>
+    <div class="btn-row">
+      <label class="btn primary" for="camInput">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>
+        Kamerayla çek
+      </label>
+      <input class="vis-hide" id="camInput" type="file" accept="video/*" capture="environment">
+      <label class="btn" for="fileInput">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M10 9.5v5l4-2.5z" fill="currentColor"/></svg>
+        Videodan seç
+      </label>
+      <input class="vis-hide" id="fileInput" type="file" accept="video/*">
+      <button class="btn" id="demoBtn" type="button">Örneğe dön</button>
+    </div>
+    <div class="stage"><canvas id="preview" width="640" height="360" aria-label="Video önizleme ve sayım bölgesi"></canvas></div>
+    <p class="hint">Sayım bölgesini çizmek için görüntü üzerinde parmağınızla sürükleyin. Bölge, ürünlerin arasında boşluk görünen dar bir şerit olsun.</p>
+    <p class="src-name" id="srcName">Simülasyon: 3 dk, nominal 60 adet/dk, üç duruşlu hat</p>
+    <video id="vid" muted playsinline preload="auto" hidden></video>
+  </section>
+
+  <section class="panel" aria-labelledby="h-ayar">
+    <div class="panel-head"><span class="step">2</span><h2 id="h-ayar">Ayarlar</h2></div>
+    <div class="fields">
+      <div class="field">
+        <label for="nominal">Nominal hız</label>
+        <input id="nominal" type="number" inputmode="decimal" min="1" step="1" value="60">
+        <small>adet / dakika · <b id="cycleOut">1,0 sn</b> / ürün</small>
+      </div>
+      <div class="field">
+        <label for="stopMul">Duruş eşiği</label>
+        <input id="stopMul" type="number" inputmode="decimal" min="1" step="0.5" value="3">
+        <small>çevrim · <b id="thrOut">3,0 sn</b> ürün gelmezse duruş</small>
+      </div>
+      <div class="field">
+        <label for="rate">Analiz hızı</label>
+        <select id="rate">
+          <option value="1">1× hassas</option>
+          <option value="2">2×</option>
+        </select>
+        <small>video oynatılarak okunur</small>
+      </div>
+    </div>
+    <div class="btn-row"><button class="btn primary" id="analyzeBtn" type="button">Analiz et</button><button class="btn" id="cancelBtn" type="button" hidden>Durdur</button></div>
+    <div class="progress" aria-hidden="true"><i id="bar"></i></div>
+    <p class="status" id="status" role="status"></p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-sonuc">
+    <div class="panel-head"><span class="step">3</span><h2 id="h-sonuc">Sonuç</h2><span class="badge" id="resBadge">Örnek veri</span></div>
+    <p class="note" id="staleNote" hidden>Sayım bölgesi değişti. Yeni bölgeyle sonuç almak için “Analiz et”e basın.</p>
+    <p class="note" id="warnNote" hidden></p>
+    <div class="tiles">
+      <div class="tile"><span class="k">Kayıt süresi</span><span class="v" id="tRec">–</span><span class="s">video uzunluğu</span></div>
+      <div class="tile stop"><span class="k">Duruş süresi</span><span class="v" id="tStop">–</span><span class="s" id="tStopN">–</span></div>
+      <div class="tile run"><span class="k">Çalışma süresi</span><span class="v" id="tRun">–</span><span class="s" id="tSpeed">–</span></div>
+      <div class="tile"><span class="k">Adet</span><span class="v" id="tCount">–</span><span class="s" id="tGood">–</span></div>
+    </div>
+
+    <div class="sub-head"><h3>Oynatıcı</h3><span id="playInfo">video + şerit + anlık OEE</span></div>
+    <canvas id="player" width="720" height="640" aria-label="Video, şerit ve anlık OEE göstergesi"></canvas>
+    <div class="player-ctrl">
+      <button class="btn" id="playBtn" type="button" aria-label="Oynat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path id="playIcon" d="M7 5v14l12-7z" fill="currentColor"/></svg><span id="playLbl">Oynat</span>
+      </button>
+      <input id="seek" type="range" min="0" max="180" step="0.1" value="0" aria-label="Videoda konum">
+      <output id="seekOut">0:00</output>
+    </div>
+
+    <div class="sub-head"><h3>Hat şeridi</h3><span id="stripInfo"></span></div>
+    <div class="strip-wrap">
+      <div class="strip" id="strip" aria-label="Çalışma ve duruş şeridi"><div class="runfill" id="runFill"></div><div class="playhead" id="playhead"></div></div>
+      <div class="strip-axis" id="stripAxis"></div>
+    </div>
+    <div class="legend"><span><i style="background:var(--run)"></i>Çalışıyor</span><span><i style="background:var(--stop)"></i>Duruş</span><span><i style="background:var(--rej)"></i>Reject</span><span><i style="background:var(--pending)"></i>Henüz okunmadı</span></div>
+    <p class="hint">Kırmızıya dokunun, aşağıda yorum kartı açılır. Türü Reject seçerseniz şerit kahverengi olur. Yeşile dokunmak videoyu o ana götürür.</p>
+
+    <div class="sub-head"><h3>Duruş yorumları</h3><span id="cardInfo"></span></div>
+    <div class="cards" id="cards"></div>
+
+    <div class="oee">
+      <div class="oee-top">
+        <div class="oee-main"><div class="k">OEE</div><div class="v" id="oeeV">–</div></div>
+        <div class="factors"><span>K <b id="fA">–</b></span><span>P <b id="fP">–</b></span><span>Q <b id="fQ">–</b></span></div>
+      </div>
+      <div class="lossbar" id="lossBar" aria-hidden="true"><i id="lbOee" style="background:var(--run)"></i><i id="lbSpd" style="background:var(--warn)"></i><i id="lbQ" style="background:var(--rej)"></i><i id="lbStop" style="background:var(--stop)"></i></div>
+      <ul class="loss-list">
+        <li style="--c:var(--run)"><span class="k">OEE</span><span class="v" id="lOee">–</span><span class="s" id="lOeeT">–</span></li>
+        <li style="--c:var(--warn)"><span class="k">Hız kaybı</span><span class="v" id="lSpd">–</span><span class="s" id="lSpdT">–</span></li>
+        <li style="--c:var(--rej)"><span class="k">Kalite kaybı</span><span class="v" id="lQ">–</span><span class="s" id="lQT">–</span></li>
+        <li style="--c:var(--stop)"><span class="k">Duruş</span><span class="v" id="lStop">–</span><span class="s" id="lStopT">–</span></li>
+      </ul>
+      <div class="cat-break" id="catBreak"></div>
+      <div class="rej-row"><label for="rejRun">Hat çalışırken atılan reject</label><input id="rejRun" type="number" inputmode="numeric" min="0" step="1" value="0"><span class="hint">adet</span></div>
+    </div>
+
+    <details>
+      <summary>Hız grafiği</summary>
+      <div class="inner">
+        <div class="legend"><span><i style="background:var(--accent)"></i>Hız (adet/dk)</span><span><i style="background:var(--stop-soft);border:1px solid var(--stop)"></i>Duruş</span><span><i style="background:transparent;border-top:2px dashed var(--muted);height:0;width:14px"></i>Nominal</span></div>
+        <div class="chart-box" id="speedChart"></div>
+      </div>
+    </details>
+
+    <details>
+      <summary>Sayım kontrolü ve hassasiyet</summary>
+      <div class="inner">
+        <p class="hint">Sayım bölgesinden okunan sinyal. Her yeşil çizgi sayılan bir üründür. Yanlış sayım varsa hassasiyeti oynatın, sonuçlar hemen güncellenir.</p>
+        <div class="field"><label for="sens">Hassasiyet eşiği</label>
+          <div class="range-row"><input id="sens" type="range" min="20" max="80" step="1" value="50"><output id="sensOut">50</output></div>
+        </div>
+        <div class="field"><label for="win">Pencere başlangıcı</label>
+          <div class="range-row"><input id="win" type="range" min="0" max="100" step="0.5" value="0"><output id="winOut">0:00</output></div>
+        </div>
+        <div class="chart-box" id="sigChart"></div>
+      </div>
+    </details>
+
+    <div class="btn-row">
+      <button class="btn primary" id="xlsxBtn" type="button" hidden>Excel indir</button>
+      <button class="btn" id="videoBtn" type="button" hidden>Video indir</button>
+      <button class="btn" id="copyBtn" type="button">Özeti kopyala</button>
+    </div>
+    <p class="exp-status" id="expStatus"></p>
+
+    <details>
+      <summary>Nasıl hesaplanıyor?</summary>
+      <ol class="method">
+        <li>Nominal hızdan çevrim süresi bulunur: 60 adet/dk → 60 ÷ 60 = 1 sn / ürün.</li>
+        <li>Duruş eşiği = çevrim × eşik. 1 sn × 3 = 3 sn. İki ürün arası boşluk 3 sn’yi aşarsa o boşluğun tamamı kırmızı (duruş) olur.</li>
+        <li>Planlanan süre = kayıt süresi. Duruş % = duruş süresi ÷ kayıt süresi.</li>
+        <li>Hız kaybı = çalışma süresi − (adet × çevrim). Yani hat çalışırken nominalden yavaş geçen süre.</li>
+        <li>Kalite kaybı = reject adedi × çevrim. Reject’i duruş kartlarına ya da “çalışırken atılan reject” alanına yazın.</li>
+        <li>OEE = (adet − reject) × çevrim ÷ kayıt süresi. Dört kalem toplamı her zaman %100 eder.</li>
+        <li>Kartta seçilen tür (Duruş, Reject, Diğer) duruş süresinin dağılımını gösterir. Hangi tür seçilirse seçilsin kırmızı süre duruş sayılır.</li>
+      </ol>
+    </details>
+  </section>
+</div>
+<div class="toast" id="toast" hidden></div>
+
+<script src="capacitor.js"></script>
+<script src="xlsx.full.min.js"></script>
+<script>
+(() => {
+'use strict';
+const $ = id => document.getElementById(id);
+const G = 16; // ROI sample grid
+const CATS = [['durus','Duruş'],['reject','Reject'],['diger','Diğer']];
+const CAT_NAME = {durus:'Duruş', reject:'Reject', diger:'Diğer', '':'Yorumsuz'};
+
+// ---------- state ----------
+const S = {
+  source: 'demo',
+  roi: {x:0.60, y:0.36, w:0.05, h:0.34},
+  frames: [], times: [], duration: 0, totalDur: 0, sep: 0,
+  smooth: null, res: null, isExample: true, scanning: false, cancel: false, stale: false,
+  fileName: '', comments: [], selId: null, storeKey: 'demo'
+};
+let cid = 0;
+
+// ---------- helpers ----------
+function fmt(sec){
+  sec = Math.max(0, Math.round(sec));
+  const h = Math.floor(sec/3600), m = Math.floor(sec%3600/60), s = sec%60;
+  return h ? `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}` : `${m}:${String(s).padStart(2,'0')}`;
+}
+function fmtLong(sec){
+  sec = Math.max(0, Math.round(sec));
+  const m = Math.floor(sec/60), s = sec%60;
+  return m ? `${m} dk ${s} sn` : `${s} sn`;
+}
+const nf1 = new Intl.NumberFormat('tr-TR',{maximumFractionDigits:1, minimumFractionDigits:1});
+const nf0 = new Intl.NumberFormat('tr-TR',{maximumFractionDigits:0});
+const pct = v => `%${nf1.format(v*100)}`;
+function toast(msg){ const t=$('toast'); t.textContent=msg; t.hidden=false; clearTimeout(toast._t); toast._t=setTimeout(()=>t.hidden=true,2200); }
+function params(){
+  const V = Math.max(1, parseFloat($('nominal').value) || 60);
+  const mul = Math.max(1, parseFloat($('stopMul').value) || 3);
+  const cycle = 60/V, thr = mul*cycle;
+  const k = parseInt($('sens').value,10)/100;
+  return {V, mul, cycle, thr, k};
+}
+function showParams(){ const p = params(); $('cycleOut').textContent = `${nf1.format(p.cycle)} sn`; $('thrOut').textContent = `${nf1.format(p.thr)} sn`; }
+
+// ---------- comment persistence (this browser only) ----------
+function saveComments(){
+  try { localStorage.setItem('hhs:'+S.storeKey, JSON.stringify({c:S.comments.filter(hasContent), r:+$('rejRun').value||0})); } catch(e){}
+}
+function loadComments(key){
+  try { const raw = localStorage.getItem('hhs:'+key); if (!raw) return null; return JSON.parse(raw); } catch(e){ return null; }
+}
+const hasContent = c => c.cat || c.note || c.rej;
+
+// ---------- demo line (simulation) ----------
+const DEMO = {W:320, H:180, T:180, fps:15, belt:110, stops:[[40,62],[95,99],[128,137]]};
+function mulberry(a){ return () => { a|=0; a=a+0x6D2B79F5|0; let t=Math.imul(a^a>>>15,1|a); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+function beltL(t){ let L = t*DEMO.belt; for (const [a,b] of DEMO.stops){ if (t>a) L -= (Math.min(t,b)-a)*DEMO.belt; } return L; }
+const demoItems = (() => {
+  const r = mulberry(7), arr=[]; let d = -60; const Lend = beltL(DEMO.T) + 60;
+  const base = DEMO.belt*60/54; // ~54 adet/dk while running
+  while (d < Lend){ arr.push({d, hue: r()}); d += base*(0.82 + r()*0.36); }
+  return arr;
+})();
+const DEMO_NOTES = [
+  {cat:'durus', note:'Etiket makinesi sıkıştı, operatör müdahale etti', rej:0},
+  {cat:'reject', note:'Kapak hatası, reject istasyonu dolu', rej:4},
+];
+const demoCanvas = document.createElement('canvas'); demoCanvas.width=DEMO.W; demoCanvas.height=DEMO.H;
+const dctx = demoCanvas.getContext('2d', {willReadFrequently:true});
+function drawDemo(t){
+  const c = dctx, W=DEMO.W, H=DEMO.H, L=beltL(t);
+  c.fillStyle='#5d646c'; c.fillRect(0,0,W,H);
+  c.fillStyle='#4b5259'; c.fillRect(0,0,W,52);
+  c.fillStyle='#22272d'; c.fillRect(0,64,W,72);
+  c.strokeStyle='#30363d'; c.lineWidth=2;
+  const off = L % 18;
+  for (let x=-18+off; x<W; x+=18){ c.beginPath(); c.moveTo(x,64); c.lineTo(x,136); c.stroke(); }
+  c.fillStyle='#8a9198'; c.fillRect(0,60,W,4); c.fillRect(0,136,W,4);
+  for (const it of demoItems){
+    const x = L - it.d; if (x < -40 || x > W+4) continue;
+    c.fillStyle = '#e9e4da'; c.fillRect(x, 74, 34, 52);
+    c.fillStyle = it.hue < .5 ? '#3c78c8' : '#c84a3c'; c.fillRect(x, 92, 34, 9);
+    c.fillStyle = 'rgba(0,0,0,.18)'; c.fillRect(x+34, 76, 3, 50);
+  }
+  const fl = (Math.sin(t*7.3)+Math.sin(t*2.1))*3;
+  if (fl>0){ c.fillStyle=`rgba(255,255,255,${fl/120})`; c.fillRect(0,0,W,H); }
+}
+
+// ---------- preview canvas & ROI drawing ----------
+const pv = $('preview'), pctx = pv.getContext('2d');
+let lastPreviewSrc = null;
+function sizePreview(w,h){ const sc = Math.min(1, 720/w); pv.width = Math.round(w*sc); pv.height = Math.round(h*sc); }
+function drawPreview(src){
+  if (src) lastPreviewSrc = src;
+  if (lastPreviewSrc){ try { pctx.drawImage(lastPreviewSrc, 0, 0, pv.width, pv.height); } catch(e){} }
+  const r = S.roi, W=pv.width, H=pv.height, lw = Math.max(2, W/240);
+  pctx.save();
+  pctx.fillStyle='rgba(29,95,196,.22)'; pctx.fillRect(r.x*W, r.y*H, r.w*W, r.h*H);
+  pctx.strokeStyle='#ffd23f'; pctx.lineWidth=lw; pctx.setLineDash([lw*3,lw*2]); pctx.strokeRect(r.x*W, r.y*H, r.w*W, r.h*H); pctx.setLineDash([]);
+  const fs = Math.max(11, Math.round(W/34));
+  pctx.font = `600 ${fs}px "IBM Plex Sans", sans-serif`;
+  const label='SAYIM BÖLGESİ', tw = pctx.measureText(label).width;
+  let lx = Math.min(r.x*W, W - tw - 10), ly = r.y*H - 6; if (ly < fs+4) ly = (r.y+r.h)*H + fs + 4;
+  pctx.fillStyle='rgba(0,0,0,.6)'; pctx.fillRect(lx-4, ly-fs, tw+8, fs+6);
+  pctx.fillStyle='#ffd23f'; pctx.fillText(label, lx, ly);
+  pctx.restore();
+}
+let drag = null;
+function ptNorm(e){ const b = pv.getBoundingClientRect(); return {x: Math.min(1,Math.max(0,(e.clientX-b.left)/b.width)), y: Math.min(1,Math.max(0,(e.clientY-b.top)/b.height))}; }
+pv.addEventListener('pointerdown', e => { if (S.scanning) return; drag = ptNorm(e); pv.setPointerCapture(e.pointerId); });
+pv.addEventListener('pointermove', e => {
+  if (!drag) return; const p = ptNorm(e);
+  S.roi = {x:Math.min(drag.x,p.x), y:Math.min(drag.y,p.y), w:Math.abs(p.x-drag.x), h:Math.abs(p.y-drag.y)};
+  if (S.source==='video') drawPreview();
+});
+pv.addEventListener('pointerup', () => {
+  if (!drag) return; drag = null;
+  if (S.roi.w < 0.015 || S.roi.h < 0.03){
+    const cx = S.roi.x, cy = S.roi.y;
+    S.roi = {x:Math.max(0,Math.min(0.95,cx-0.025)), y:Math.max(0,Math.min(0.7,cy-0.15)), w:0.05, h:0.3};
+  }
+  if (S.res){ S.stale = true; $('staleNote').hidden = false; }
+  if (S.source==='video') drawPreview();
+});
+let demoClock = 0, lastTs = 0;
+function demoLoop(ts){
+  if (S.source==='demo' && !S.scanning){
+    const dt = lastTs ? (ts-lastTs)/1000 : 0; lastTs = ts;
+    demoClock = (demoClock + dt) % DEMO.T; drawDemo(demoClock); drawPreview(demoCanvas);
+  } else lastTs = 0;
+  requestAnimationFrame(demoLoop);
+}
+
+// ---------- sampling & signal ----------
+const sc = document.createElement('canvas'); sc.width=G; sc.height=G;
+const sctx = sc.getContext('2d', {willReadFrequently:true});
+function resetScan(){ S.frames=[]; S.times=[]; S.smooth=null; }
+function sample(src, sw, sh, t){
+  const r = S.roi;
+  const x = Math.round(r.x*sw), y = Math.round(r.y*sh), w = Math.max(2,Math.round(r.w*sw)), h = Math.max(2,Math.round(r.h*sh));
+  sctx.drawImage(src, x, y, w, h, 0, 0, G, G);
+  const d = sctx.getImageData(0,0,G,G).data, g = new Uint8Array(G*G);
+  for (let i=0,j=0;i<g.length;i++,j+=4) g[i] = (d[j]*77 + d[j+1]*150 + d[j+2]*29) >> 8;
+  S.frames.push(g); S.times.push(t);
+}
+// Two-state model: cluster ROI frames into "product present" vs "gap" (k-means, k=2)
+function computeSignal(){
+  const F = S.frames, n = F.length, P = G*G;
+  if (n < 10) return false;
+  const d2 = (a,b) => { let s=0; for (let p=0;p<P;p++){ const d=a[p]-b[p]; s+=d*d; } return s; };
+  const stride = Math.max(1, Math.floor(n/3000)), sub = [];
+  for (let i=0;i<n;i+=stride) sub.push(F[i]);
+  const far = ref => { let bi=0, bd=-1; for (let i=0;i<sub.length;i++){ const d=d2(sub[i],ref); if (d>bd){bd=d;bi=i;} } return sub[bi]; };
+  let c1 = Float32Array.from(far(sub[0])), c2 = Float32Array.from(far(c1));
+  for (let it=0; it<10; it++){
+    const a1=new Float64Array(P), a2=new Float64Array(P); let n1=0,n2=0;
+    for (const f of sub){ if (d2(f,c1) <= d2(f,c2)){ n1++; for (let p=0;p<P;p++) a1[p]+=f[p]; } else { n2++; for (let p=0;p<P;p++) a2[p]+=f[p]; } }
+    if (!n1 || !n2) break;
+    for (let p=0;p<P;p++){ c1[p]=a1[p]/n1; c2[p]=a2[p]/n2; }
+  }
+  S.sep = Math.sqrt(d2(c1,c2)/P);
+  const sig = new Float32Array(n);
+  for (let i=0;i<n;i++){ const a=Math.sqrt(d2(F[i],c1)), b=Math.sqrt(d2(F[i],c2)); sig[i] = (a+b)>0 ? a/(a+b) : 0.5; }
+  const sm = new Float32Array(n);
+  for (let i=0;i<n;i++){ const a=sig[Math.max(0,i-1)], b=sig[i], c=sig[Math.min(n-1,i+1)]; sm[i] = Math.max(Math.min(a,b), Math.min(Math.max(a,b),c)); }
+  S.smooth = sm; S.nSig = n;
+  return true;
+}
+
+// ---------- analysis (instant, from stored signal) ----------
+function analyze(){
+  const {V, cycle, thr, k} = params();
+  const sm = S.smooth, n = sm ? sm.length : 0, ts = S.times, T = S.duration;
+  if (!n) return null;
+  const sorted = Array.from(sm).sort((a,b)=>a-b);
+  const lo = sorted[Math.floor(n*0.02)], hi = sorted[Math.min(n-1,Math.floor(n*0.98))], range = hi-lo;
+  const minGap = cycle*0.5, hiT = lo + k*range, loT = lo + Math.max(0.05, k-0.2)*range;
+  const counts = [];
+  const ok = S.sep >= 5 && range > 0.15;
+  if (ok){
+    let high = sm[0] > hiT, lastC = -1e9;
+    for (let i=1;i<n;i++){
+      if (!high && sm[i] > hiT){ high = true; if (ts[i]-lastC >= minGap){ counts.push(ts[i]); lastC = ts[i]; } }
+      else if (high && sm[i] < loT) high = false;
+    }
+  }
+  const stops = []; let prev = 0;
+  for (const c of counts.concat([T])){ if (c - prev > thr) stops.push({start:prev, end:c, dur:c-prev}); prev = c; }
+  if (stops.length && S.scanning) stops[stops.length-1].open = stops[stops.length-1].end === T;
+  const stopT = stops.reduce((a,s)=>a+s.dur,0), runT = Math.max(0, T-stopT), N = counts.length;
+  const speed = runT>0 ? N/(runT/60) : 0;
+  const fps = n / Math.max(T,0.001), spc = fps*cycle;
+  return {ok, V, cycle, thr, k, counts, stops, stopT, runT, N, speed, T, hiT, loT, lo, hi, range, fps, spc};
+}
+
+// match comments to detected stops by time overlap (survives re-analysis)
+function attachComments(R){
+  const used = new Set();
+  for (const st of R.stops){
+    let best = null, bo = 0;
+    for (const c of S.comments){ if (used.has(c.id)) continue; const o = Math.min(st.end,c.end) - Math.max(st.start,c.start); if (o > bo){ bo = o; best = c; } }
+    if (!best){ best = {id:'c'+(++cid), start:st.start, end:st.end, cat:'', note:'', rej:0}; S.comments.push(best); }
+    used.add(best.id); best.start = st.start; best.end = st.end; st.c = best;
+  }
+  S.comments = S.comments.filter(c => used.has(c.id) || hasContent(c));
+}
+
+// ---------- OEE (time-loss model, sums to 100 %) ----------
+function oee(R){
+  const P = R.T, c = R.cycle, N = R.N;
+  const rejStops = R.stops.reduce((a,s)=>a + (s.c && s.c.cat==='reject' ? (+s.c.rej||0) : 0), 0);
+  const rej = Math.min(N, rejStops + (Math.max(0, +$('rejRun').value || 0)));
+  const ideal = N*c, good = N - rej;
+  const spdLoss = Math.max(0, R.runT - ideal), qLoss = rej*c, oeeT = good*c;
+  const A = P ? R.runT/P : 0, Pf = R.runT ? ideal/R.runT : 0, Q = N ? good/N : 0;
+  const base = Math.max(P, R.stopT + spdLoss + qLoss + oeeT) || 1;
+  const byCat = {durus:0, reject:0, diger:0, '':0};
+  for (const s of R.stops) byCat[s.c ? s.c.cat : ''] += s.dur;
+  return {P, rej, good, spdLoss, qLoss, oeeT, A, Pf, Q, oee: A*Pf*Q,
+    pStop: R.stopT/base, pSpd: spdLoss/base, pQ: qLoss/base, pOee: oeeT/base, byCat};
+}
+
+// ---------- rendering ----------
+function render(){
+  showParams();
+  const R = S.res = analyze();
+  $('resBadge').hidden = !S.isExample;
+  if (!R) return;
+  attachComments(R);
+  $('tRec').textContent = fmt(R.T);
+  $('tStop').textContent = fmt(R.stopT);
+  $('tStopN').textContent = `${R.stops.length} duruş`;
+  $('tRun').textContent = fmt(R.runT);
+  $('tSpeed').textContent = `${nf1.format(R.speed)} adet/dk`;
+  $('tCount').textContent = nf0.format(R.N);
+  let msg = '';
+  if (!R.ok) msg = 'Sayım bölgesinde değişim görülmedi. Bölgeyi ürünlerin geçtiği yere çizip tekrar analiz edin.';
+  else if (R.spc < 4) msg = `Her ürün için yalnızca ${nf1.format(R.spc)} kare okunabildi. Sayım kaçabilir; analiz hızını 1× yapın.`;
+  else if (R.runT > 0 && R.N*R.cycle > R.runT*1.15) msg = 'Gerçek hız nominalin çok üstünde. Çift sayım olabilir; hassasiyeti yükseltin ya da nominal hızı kontrol edin.';
+  $('warnNote').textContent = msg; $('warnNote').hidden = !msg;
+  $('staleNote').hidden = !S.stale;
+  renderStrip(R); renderCards(R); renderOEE(R); setupPlayer(); drawPlayer();
+  renderSpeedChart(R); renderSignal(R);
+  const winEl = $('win'); winEl.max = Math.max(0, R.T - Math.min(R.T,15)).toFixed(1);
+  if (+winEl.value > +winEl.max) winEl.value = winEl.max;
+  $('winOut').textContent = fmt(+winEl.value);
+}
+
+function renderStrip(R){
+  const strip = $('strip'), total = Math.max(S.totalDur || R.T, R.T) || 1;
+  $('runFill').style.width = (R.T/total*100).toFixed(3)+'%';
+  const keep = new Set();
+  R.stops.forEach((st,i) => {
+    const id = st.c.id; keep.add(id);
+    let el = strip.querySelector(`.seg[data-id="${id}"]`);
+    if (!el){ el = document.createElement('button'); el.type='button'; el.className='seg'; el.dataset.id=id; el.addEventListener('click', ev => { ev.stopPropagation(); const c = S.comments.find(x=>x.id===id); if (c) seekPlayer(c.start); select(id, true); }); strip.appendChild(el); }
+    el.style.left = (st.start/total*100).toFixed(3)+'%';
+    el.style.width = (st.dur/total*100).toFixed(3)+'%';
+    el.textContent = (st.dur/total*strip.clientWidth > 20) ? String(i+1) : '';
+    el.classList.toggle('done', hasContent(st.c));
+    el.classList.toggle('rej', st.c.cat === 'reject');
+    el.classList.toggle('sel', S.selId === id);
+    el.setAttribute('aria-label', `Duruş ${i+1}: ${fmt(st.start)}–${fmt(st.end)}, ${fmtLong(st.dur)}${hasContent(st.c)?', yorumlu':''}`);
+  });
+  strip.querySelectorAll('.seg').forEach(el => { if (!keep.has(el.dataset.id)) el.remove(); });
+  const ax = $('stripAxis'), n = strip.clientWidth < 420 ? 4 : 6;
+  let h = ''; for (let i=0;i<=n;i++) h += `<span style="left:${(i/n*100).toFixed(2)}%">${fmt(total*i/n)}</span>`;
+  ax.innerHTML = h;
+  placePlayhead();
+  const done = R.stops.filter(s => hasContent(s.c)).length;
+  $('stripInfo').textContent = R.stops.length ? `${R.stops.length} kırmızı · ${done} yorumlu` : '';
+}
+
+const cardEls = new Map();
+function makeCard(c){
+  const el = document.createElement('div'); el.className = 'card'; el.dataset.id = c.id;
+  el.innerHTML = `<div class="card-head"><span class="num"></span><span class="time"></span><span class="dur"></span></div>
+    <div class="chips" role="group" aria-label="Duruş türü">${CATS.map(([k,l])=>`<button type="button" class="chip" data-cat="${k}" aria-pressed="false">${l}</button>`).join('')}</div>
+    <div class="rej-row" hidden><label for="rej-${c.id}">Reject adedi</label><input id="rej-${c.id}" type="number" inputmode="numeric" min="0" step="1"></div>
+    <textarea id="note-${c.id}" placeholder="Yorumunuz: ör. etiket makinesi sıkıştı" aria-label="Duruş yorumu"></textarea>`;
+  const chips = el.querySelectorAll('.chip'), rejRow = el.querySelector('.rej-row'), rejIn = el.querySelector('input'), ta = el.querySelector('textarea');
+  const sync = () => {
+    chips.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.cat === c.cat)));
+    rejRow.hidden = c.cat !== 'reject';
+  };
+  chips.forEach(b => b.addEventListener('click', () => { c.cat = c.cat === b.dataset.cat ? '' : b.dataset.cat; sync(); select(c.id, false); changed(); if (c.cat==='reject') rejIn.focus(); }));
+  rejIn.value = c.rej || ''; ta.value = c.note || '';
+  rejIn.addEventListener('input', () => { c.rej = Math.max(0, parseInt(rejIn.value,10) || 0); changed(); });
+  ta.addEventListener('input', () => { c.note = ta.value; changed(); });
+  ta.addEventListener('focus', () => select(c.id, false));
+  el._sync = () => { sync(); if (document.activeElement !== ta) ta.value = c.note || ''; if (document.activeElement !== rejIn) rejIn.value = c.rej || ''; };
+  sync();
+  return el;
+}
+function renderCards(R){
+  const box = $('cards');
+  if (!R.stops.length){
+    box.querySelectorAll('.card').forEach(e => e.remove());
+    if (!box.querySelector('.empty')) box.insertAdjacentHTML('beforeend', '<p class="empty">Duruş eşiğini aşan boşluk yok. Şerit baştan sona yeşil.</p>');
+    $('cardInfo').textContent = ''; return;
+  }
+  const emp = box.querySelector('.empty'); if (emp) emp.remove();
+  const keep = new Set();
+  R.stops.forEach((st,i) => {
+    const c = st.c; keep.add(c.id);
+    let el = cardEls.get(c.id);
+    if (!el){ el = makeCard(c); cardEls.set(c.id, el); }
+    el.querySelector('.num').textContent = `#${i+1}`;
+    el.querySelector('.time').textContent = `${fmt(st.start)} – ${st.open ? 'devam ediyor' : fmt(st.end)}`;
+    el.querySelector('.dur').textContent = fmtLong(st.dur);
+    el.classList.toggle('open-end', !!st.open);
+    el.classList.toggle('sel', S.selId === c.id);
+    if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+  });
+  for (const [id, el] of cardEls){ if (!keep.has(id)){ el.remove(); if (!S.comments.find(c=>c.id===id)) cardEls.delete(id); } }
+  const done = R.stops.filter(s => hasContent(s.c)).length;
+  $('cardInfo').textContent = `${done} / ${R.stops.length} yorumlu`;
+}
+function select(id, focus){
+  S.selId = id;
+  document.querySelectorAll('.seg').forEach(e => e.classList.toggle('sel', e.dataset.id === id));
+  document.querySelectorAll('.card').forEach(e => e.classList.toggle('sel', e.dataset.id === id));
+  if (focus){
+    const el = cardEls.get(id); if (!el) return;
+    el.scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'center'});
+    setTimeout(() => { try { el.querySelector('textarea').focus({preventScroll:true}); } catch(e){} }, 250);
+  }
+}
+function changed(){
+  if (!S.res) return;
+  renderOEE(S.res);
+  const R = S.res;
+  R.stops.forEach(st => { const seg = document.querySelector(`.seg[data-id="${st.c.id}"]`); if (seg){ seg.classList.toggle('done', hasContent(st.c)); seg.classList.toggle('rej', st.c.cat === 'reject'); } });
+  drawPlayer();
+  const done = R.stops.filter(s => hasContent(s.c)).length;
+  $('cardInfo').textContent = `${done} / ${R.stops.length} yorumlu`;
+  $('stripInfo').textContent = `${R.stops.length} kırmızı · ${done} yorumlu`;
+  clearTimeout(changed._t); changed._t = setTimeout(saveComments, 400);
+}
+function renderOEE(R){
+  const O = S.oee = oee(R);
+  $('oeeV').textContent = pct(O.oee);
+  $('fA').textContent = pct(O.A); $('fP').textContent = pct(O.Pf); $('fQ').textContent = pct(O.Q);
+  $('lbOee').style.width = (O.pOee*100)+'%'; $('lbSpd').style.width = (O.pSpd*100)+'%'; $('lbQ').style.width = (O.pQ*100)+'%'; $('lbStop').style.width = (O.pStop*100)+'%';
+  $('lOee').textContent = pct(O.pOee); $('lOeeT').textContent = `${fmt(O.oeeT)} · ${nf0.format(O.good)} sağlam`;
+  $('lSpd').textContent = pct(O.pSpd); $('lSpdT').textContent = `${fmt(O.spdLoss)} · ${nf0.format(O.spdLoss/R.cycle)} adet`;
+  $('lQ').textContent = pct(O.pQ); $('lQT').textContent = `${fmt(O.qLoss)} · ${nf0.format(O.rej)} reject`;
+  $('lStop').textContent = pct(O.pStop); $('lStopT').textContent = `${fmt(R.stopT)} · ${R.stops.length} duruş`;
+  $('tGood').textContent = `${nf0.format(O.good)} sağlam · ${nf0.format(O.rej)} reject`;
+  const parts = [];
+  for (const k of ['durus','reject','diger','']) if (O.byCat[k] > 0) parts.push(`<span>${CAT_NAME[k]}: ${fmt(O.byCat[k])}</span>`);
+  $('catBreak').innerHTML = parts.join('');
+}
+
+function chartW(id){ const w = $(id).clientWidth || $('strip').clientWidth || 340; return Math.max(320, Math.min(760, Math.round(w))); }
+function niceStep(max){ const raw = max/4, p = Math.pow(10, Math.floor(Math.log10(raw))); const m = raw/p; return (m<=1?1:m<=2?2:m<=5?5:10)*p; }
+function renderSpeedChart(R){
+  if (!$('speedChart').closest('details').open) return;
+  const W=chartW('speedChart'), H=Math.round(W*0.42)+40, ml=40, mr=12, mt=12, mb=28, iw=W-ml-mr, ih=H-mt-mb;
+  const b = Math.max(5, Math.ceil(R.T/(W<500?30:45)/5)*5), nb = Math.max(1, Math.ceil(R.T/b));
+  const rates = new Array(nb).fill(0);
+  for (const c of R.counts) rates[Math.min(nb-1, Math.floor(c/b))]++;
+  for (let i=0;i<nb;i++){ const len = Math.min(b, R.T - i*b); rates[i] = len>0 ? rates[i]/len*60 : 0; }
+  const ymax0 = Math.max(R.V*1.15, ...rates), st = niceStep(ymax0), ymax = Math.ceil(ymax0/st)*st;
+  const x = t => ml + t/R.T*iw, y = v => mt + ih - v/ymax*ih;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Zamana göre hız grafiği">`;
+  for (const sp of R.stops) s += `<rect x="${x(sp.start).toFixed(1)}" y="${mt}" width="${Math.max(1,x(sp.end)-x(sp.start)).toFixed(1)}" height="${ih}" fill="var(--stop-soft)"/>`;
+  for (let v=0; v<=ymax+1e-6; v+=st) s += `<line x1="${ml}" x2="${W-mr}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}" stroke="var(--grid)"/><text x="${ml-6}" y="${(y(v)+4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${nf0.format(v)}</text>`;
+  const bw = iw/nb;
+  rates.forEach((r,i) => { s += `<rect x="${(ml+i*bw+bw*0.12).toFixed(1)}" y="${y(r).toFixed(1)}" width="${(bw*0.76).toFixed(1)}" height="${Math.max(0,mt+ih-y(r)).toFixed(1)}" rx="1.5" fill="var(--accent)"/>`; });
+  s += `<line x1="${ml}" x2="${W-mr}" y1="${y(R.V).toFixed(1)}" y2="${y(R.V).toFixed(1)}" stroke="var(--muted)" stroke-width="1.5" stroke-dasharray="6 4"/>`;
+  s += `<text x="${W-mr}" y="${(y(R.V)-5).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif">nominal ${nf0.format(R.V)}</text>`;
+  const tStep = Math.max(10, Math.round(niceStep(R.T*(W<500?0.9:0.6))/10)*10);
+  for (let t=0; t<=R.T+1e-6; t+=tStep) s += `<text x="${x(t).toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${fmt(t)}</text>`;
+  s += `<line x1="${ml}" x2="${W-mr}" y1="${mt+ih}" y2="${mt+ih}" stroke="var(--line)"/></svg>`;
+  $('speedChart').innerHTML = s;
+}
+function renderSignal(R){
+  if (!$('sigChart').closest('details').open) return;
+  const W=chartW('sigChart'), H=Math.round(W*0.36)+30, ml=20, mr=20, mt=10, mb=24, iw=W-ml-mr, ih=H-mt-mb;
+  const wl = Math.min(R.T, 15) || 1, t0 = Math.min(+$('win').value || 0, Math.max(0,R.T-wl)), t1 = t0 + wl;
+  const ts = S.times, sm = S.smooth;
+  const x = t => ml + (t-t0)/(t1-t0)*iw, y = v => mt + ih - Math.min(v,1)*ih;
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Sayım bölgesi sinyali">`;
+  for (const sp of R.stops){ if (sp.end<t0||sp.start>t1) continue; const a=Math.max(t0,sp.start), b=Math.min(t1,sp.end); s += `<rect x="${x(a).toFixed(1)}" y="${mt}" width="${(x(b)-x(a)).toFixed(1)}" height="${ih}" fill="var(--stop-soft)"/>`; }
+  for (const c of R.counts){ if (c<t0||c>t1) continue; s += `<line x1="${x(c).toFixed(1)}" x2="${x(c).toFixed(1)}" y1="${mt}" y2="${mt+ih}" stroke="var(--run)" stroke-width="1.2" opacity=".75"/>`; }
+  let d = '';
+  for (let i=0;i<sm.length;i++){ if (ts[i]<t0) continue; if (ts[i]>t1) break; d += (d?'L':'M') + x(ts[i]).toFixed(1) + ' ' + y(sm[i]).toFixed(1); }
+  if (d) s += `<path d="${d}" fill="none" stroke="var(--accent)" stroke-width="1.6" stroke-linejoin="round"/>`;
+  s += `<line x1="${ml}" x2="${W-mr}" y1="${y(R.hiT).toFixed(1)}" y2="${y(R.hiT).toFixed(1)}" stroke="var(--warn)" stroke-dasharray="5 4"/>`;
+  s += `<text x="${W-mr}" y="${(y(R.hiT)-4).toFixed(1)}" text-anchor="end" font-size="11" fill="var(--warn)" font-family="IBM Plex Sans, sans-serif">eşik</text>`;
+  for (let t=Math.ceil(t0/5)*5; t<=t1; t+=5) s += `<text x="${x(t).toFixed(1)}" y="${H-7}" text-anchor="middle" font-size="11" fill="var(--muted)" font-family="IBM Plex Mono, monospace">${fmt(t)}</text>`;
+  $('sigChart').innerHTML = s + '</svg>';
+}
+
+// ---------- scanning ----------
+function setProgress(p, msg, err){ $('bar').style.width = (Math.max(0,Math.min(1,p))*100).toFixed(1)+'%'; const st=$('status'); st.textContent = msg||''; st.classList.toggle('err', !!err); }
+let lastLive = 0;
+function liveUpdate(t, force){
+  const now = performance.now();
+  if (!force && now - lastLive < 1500) return;
+  lastLive = now;
+  if (computeSignal()){ S.duration = t; render(); }
+}
+function scanDemo(){
+  return new Promise(resolve => {
+    resetScan(); S.totalDur = DEMO.T;
+    const total = Math.round(DEMO.T*DEMO.fps); let i = 0;
+    const step = () => {
+      if (S.cancel){ resolve(false); return; }
+      const end = Math.min(total, i+150);
+      for (; i<end; i++){ const t = i/DEMO.fps; drawDemo(t); sample(demoCanvas, DEMO.W, DEMO.H, t); }
+      drawPreview(demoCanvas);
+      setProgress(i/total, `Okunuyor… ${fmt(i/DEMO.fps)} / ${fmt(DEMO.T)}`);
+      if (i < total) setTimeout(step, 0); else { S.duration = DEMO.T; resolve(true); }
+    };
+    step();
+  });
+}
+const vid = $('vid');
+let wakeLock = null;
+async function keepAwake(on){ try { if (on && navigator.wakeLock) wakeLock = await navigator.wakeLock.request('screen'); else if (!on && wakeLock){ await wakeLock.release(); wakeLock = null; } } catch(e){} }
+function seekTo(t){ return new Promise(res => { const h = () => { vid.removeEventListener('seeked', h); res(); }; vid.addEventListener('seeked', h); vid.currentTime = t; }); }
+function scanVideo(){
+  return new Promise(async resolve => {
+    resetScan();
+    const dur = vid.duration, sw = vid.videoWidth, sh = vid.videoHeight;
+    S.totalDur = dur;
+    await seekTo(0);
+    vid.playbackRate = parseFloat($('rate').value) || 1;
+    let lastT = -1, frameNo = 0, done = false;
+    const finish = ok => { if (done) return; done = true; vid.pause(); if (ok) S.duration = S.times.length ? Math.max(dur||0, S.times[S.times.length-1]) : 0; resolve(ok); };
+    const take = t => {
+      if (t <= lastT) return; lastT = t;
+      sample(vid, sw, sh, t); frameNo++;
+      if (frameNo % 4 === 0){ drawPreview(vid); setProgress(t/dur, `Okunuyor… ${fmt(t)} / ${fmt(dur)} · ${S.times.length} kare`); }
+      liveUpdate(t, false);
+    };
+    vid.onended = () => finish(true);
+    if ('requestVideoFrameCallback' in vid){
+      const cb = (now, meta) => { if (done) return; if (S.cancel){ finish(false); return; } take(meta.mediaTime); vid.requestVideoFrameCallback(cb); };
+      vid.requestVideoFrameCallback(cb);
+    } else {
+      const loop = () => { if (done) return; if (S.cancel){ finish(false); return; } take(vid.currentTime); requestAnimationFrame(loop); };
+      requestAnimationFrame(loop);
+    }
+    try { await vid.play(); } catch(e){ setProgress(0, 'Video oynatılamadı. Farklı bir video deneyin.', true); finish(false); }
+  });
+}
+async function runAnalysis(){
+  if (S.scanning) return;
+  pausePlayer(); S.scanning = true; S.cancel = false; lastLive = 0;
+  $('analyzeBtn').disabled = true; $('cancelBtn').hidden = false;
+  await keepAwake(true);
+  const ok = S.source === 'demo' ? await scanDemo() : await scanVideo();
+  await keepAwake(false);
+  S.scanning = false; $('analyzeBtn').disabled = false; $('cancelBtn').hidden = true;
+  if (ok && computeSignal()){
+    S.frames = [];
+    S.stale = false; S.isExample = S.source === 'demo';
+    render();
+    setProgress(1, `Tamamlandı · ${S.times.length} kare okundu (${nf1.format(S.times.length/Math.max(1,S.duration))} kare/sn)`);
+    if (S.source === 'video') drawPreview(vid);
+  } else if (S.cancel){ setProgress(0, 'Analiz durduruldu.'); }
+  else if (ok) setProgress(0, 'Video çok kısa. En az birkaç saniyelik kayıt gerekli.', true);
+}
+$('analyzeBtn').addEventListener('click', runAnalysis);
+$('cancelBtn').addEventListener('click', () => { S.cancel = true; });
+
+function resetComments(key, seed){
+  S.storeKey = key; S.comments = []; S.selId = null;
+  cardEls.forEach(el => el.remove()); cardEls.clear();
+  document.querySelectorAll('.seg').forEach(e => e.remove());
+  const saved = loadComments(key);
+  if (saved){ S.comments = (saved.c||[]).map(c => ({...c, id:'c'+(++cid)})); $('rejRun').value = saved.r || 0; }
+  else { $('rejRun').value = 0; if (seed) S.pendingSeed = seed; }
+}
+
+// ---------- loading a video ----------
+let objUrl = null;
+function loadFile(file){
+  if (!file) return;
+  if (S.scanning) S.cancel = true;
+  if (objUrl) URL.revokeObjectURL(objUrl);
+  objUrl = URL.createObjectURL(file);
+  S.fileName = file.name || 'video';
+  setProgress(0, 'Video yükleniyor…');
+  vid.onloadedmetadata = async () => {
+    S.source = 'video';
+    sizePreview(vid.videoWidth, vid.videoHeight);
+    try { await seekTo(Math.min(0.2, (vid.duration||1)/2)); } catch(e){}
+    drawPreview(vid);
+    $('srcBadge').hidden = true;
+    $('srcName').textContent = `${S.fileName} · ${fmt(vid.duration)} · ${vid.videoWidth}×${vid.videoHeight}`;
+    resetComments(`${S.fileName}|${Math.round(vid.duration)}`, null);
+    S.stale = !!S.res; $('staleNote').hidden = !S.stale;
+    setProgress(0, 'Hazır. Sayım bölgesini çizin, sonra “Analiz et”e basın. Şerit analiz sırasında dolar.');
+  };
+  vid.onerror = () => setProgress(0, 'Bu video açılamadı. Telefonun kamerasıyla MP4 olarak çekilmiş bir video deneyin.', true);
+  vid.src = objUrl; vid.load();
+}
+$('camInput').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value=''; });
+$('fileInput').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value=''; });
+async function startDemo(){
+  if (S.scanning) return;
+  S.source='demo'; S.roi={x:0.60,y:0.36,w:0.05,h:0.34}; S.isExample = true;
+  $('nominal').value=60; $('stopMul').value=3; $('sens').value=50; $('sensOut').textContent='50';
+  sizePreview(DEMO.W*2, DEMO.H*2); $('srcBadge').hidden=false;
+  $('srcName').textContent='Simülasyon: 3 dk, nominal 60 adet/dk, üç duruşlu hat';
+  try { localStorage.removeItem('hhs:demo'); } catch(e){}
+  resetComments('demo', DEMO_NOTES);
+  await runAnalysis();
+  if (S.pendingSeed && S.res){
+    S.pendingSeed.forEach((n,i) => { const st = S.res.stops[i]; if (st) Object.assign(st.c, n); });
+    S.pendingSeed = null;
+    cardEls.forEach(el => el._sync && el._sync());
+    render();
+  }
+}
+$('demoBtn').addEventListener('click', startDemo);
+
+// ---------- live parameter changes ----------
+['nominal','stopMul'].forEach(id => $(id).addEventListener('input', () => { showParams(); if (S.smooth && !S.scanning) render(); }));
+$('rejRun').addEventListener('input', () => changed());
+$('sens').addEventListener('input', e => { $('sensOut').textContent = e.target.value; if (S.smooth && !S.scanning) render(); });
+$('win').addEventListener('input', e => { $('winOut').textContent = fmt(+e.target.value); if (S.res) renderSignal(S.res); });
+let rz; window.addEventListener('resize', () => { clearTimeout(rz); rz = setTimeout(() => { if (S.res) render(); }, 150); });
+document.querySelectorAll('details').forEach(d => d.addEventListener('toggle', () => { if (d.open && S.res){ renderSpeedChart(S.res); renderSignal(S.res); } }));
+
+// ---------- export ----------
+function summaryText(){
+  const R = S.res, O = S.oee; if (!R || !O) return '';
+  const L = [
+    `Hat hız ölçümü${S.isExample?' (örnek veri)':''}`,
+    `Kaynak: ${S.source==='demo'?'Simülasyon':S.fileName}`,
+    `Nominal: ${R.V} adet/dk · Duruş eşiği: ${nf1.format(R.thr)} sn`,
+    `Kayıt süresi: ${fmt(R.T)} · Çalışma: ${fmt(R.runT)} · Duruş: ${fmt(R.stopT)} (${R.stops.length})`,
+    `Adet: ${R.N} · Sağlam: ${O.good} · Reject: ${O.rej}`,
+    `OEE: ${pct(O.pOee)} · Hız kaybı: ${pct(O.pSpd)} · Kalite kaybı: ${pct(O.pQ)} · Duruş: ${pct(O.pStop)}`,
+    `K ${pct(O.A)} × P ${pct(O.Pf)} × Q ${pct(O.Q)}`,
+    'Duruşlar:'
+  ];
+  R.stops.forEach((s,i)=>L.push(`  ${i+1}. ${fmt(s.start)}–${fmt(s.end)} (${fmtLong(s.dur)}) · ${CAT_NAME[s.c.cat]}${s.c.cat==='reject'?` ${s.c.rej||0} adet`:''}${s.c.note?` · ${s.c.note}`:''}`));
+  return L.join('\n');
+}
+$('copyBtn').addEventListener('click', () => {
+  const txt = summaryText();
+  const fallback = () => { const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta); ta.select(); try{document.execCommand('copy'); toast('Özet kopyalandı');}catch(e){toast('Kopyalanamadı');} ta.remove(); };
+  try { navigator.clipboard.writeText(txt).then(()=>toast('Özet kopyalandı'), fallback); } catch(e){ fallback(); }
+});
+// ---------- cumulative metrics at time t (drives the synced player) ----------
+function upper(arr, t){ let lo=0, hi=arr.length; while (lo<hi){ const m=(lo+hi)>>1; if (arr[m] <= t) lo=m+1; else hi=m; } return lo; }
+function cumAt(t){
+  const R = S.res; if (!R) return null;
+  t = Math.max(0, Math.min(t, R.T));
+  const c = R.cycle, N = upper(R.counts, t);
+  let stopT = 0, rej = 0, cur = null, idx = -1;
+  R.stops.forEach((st,i) => {
+    if (st.start < t) stopT += Math.min(t, st.end) - st.start;
+    if (st.c && st.c.cat === 'reject' && st.start <= t) rej += (+st.c.rej || 0);
+    if (t >= st.start && t < st.end){ cur = st; idx = i; }
+  });
+  rej += (Math.max(0, +$('rejRun').value || 0)) * (R.N ? N/R.N : 0);
+  rej = Math.min(N, rej);
+  const run = t - stopT, spd = Math.max(0, run - N*c), q = rej*c, good = (N-rej)*c;
+  const base = Math.max(t, stopT+spd+q+good) || 1;
+  return {t, N, rej, cur, idx, pStop: stopT/base, pSpd: spd/base, pQ: q/base, pOee: good/base, Q: N ? (N-rej)/N : 1};
+}
+
+// ---------- composite renderer: video + status + strip + live OEE (also the exported video) ----------
+const PC = {bg:'#141a21', box:'#1c252f', text:'#e6ebf0', muted:'#9aa6b4', run:'#2fa862', stop:'#e0463a', rej:'#a26a36', rejText:'#d29a63', spd:'#e0a23a', pend:'#2f3a46'};
+const pl = $('player'), plx = pl.getContext('2d');
+const PLAY = {t:0, playing:false, exporting:false, vh:360, W:720, u:1, raf:0, last:0};
+function setupPlayer(){
+  const sw = S.source==='video' ? (vid.videoWidth||1280) : DEMO.W, sh = S.source==='video' ? (vid.videoHeight||720) : DEMO.H;
+  const W = sw >= sh ? 720 : 540, u = W/720, vh = Math.round(W*sh/sw/2)*2, ph = Math.round(286*u/2)*2;
+  if (pl.width !== W || pl.height !== vh+ph){ pl.width = W; pl.height = vh+ph; }
+  Object.assign(PLAY, {W, u, vh});
+  const T = S.res ? S.res.T : 0; $('seek').max = T.toFixed(1);
+}
+function rrect(c,x,y,w,h,r){ c.beginPath(); c.moveTo(x+r,y); c.arcTo(x+w,y,x+w,y+h,r); c.arcTo(x+w,y+h,x,y+h,r); c.arcTo(x,y+h,x,y,r); c.arcTo(x,y,x+w,y,r); c.closePath(); }
+function ellipsize(c, text, maxW){ if (c.measureText(text).width <= maxW) return text; let s = text; while (s.length && c.measureText(s+'…').width > maxW) s = s.slice(0,-1); return s+'…'; }
+function drawComposite(t, src){
+  const c = plx, {W, u, vh} = PLAY, H = pl.height, R = S.res;
+  c.fillStyle = '#000'; c.fillRect(0,0,W,vh);
+  if (src){ try { c.drawImage(src, 0, 0, W, vh); } catch(e){} }
+  c.fillStyle = PC.bg; c.fillRect(0, vh, W, H-vh);
+  if (!R) return;
+  const m = cumAt(t), pad = 16*u, disp = 'Barlow Condensed, Arial Narrow, sans-serif', mono = 'IBM Plex Mono, monospace', body = 'IBM Plex Sans, sans-serif';
+  // row 1: state pill, count, time
+  let y = vh + 14*u;
+  const isRej = m.cur && m.cur.c && m.cur.c.cat === 'reject';
+  const label = m.cur ? (isRej ? `REJECT #${m.idx+1}` : `DURUŞ #${m.idx+1}`) : 'ÇALIŞIYOR';
+  c.font = `700 ${26*u}px ${disp}`;
+  const lw = c.measureText(label).width + 24*u;
+  c.fillStyle = m.cur ? (isRej ? PC.rej : PC.stop) : PC.run; rrect(c, pad, y, lw, 38*u, 6*u); c.fill();
+  c.fillStyle = '#fff'; c.textBaseline = 'middle'; c.fillText(label, pad+12*u, y+19*u);
+  c.font = `500 ${21*u}px ${mono}`; c.fillStyle = PC.text; c.textAlign = 'right';
+  c.fillText(`${fmt(t)} / ${fmt(R.T)}`, W-pad, y+19*u);
+  c.textAlign = 'left'; c.fillStyle = PC.muted; c.font = `500 ${21*u}px ${mono}`;
+  c.fillText(`Adet ${m.N}`, pad+lw+14*u, y+19*u);
+  // row 2: comment or settings
+  y += 56*u; c.font = `400 ${20*u}px ${body}`;
+  let line = `Nominal ${R.V} adet/dk · eşik ${nf1.format(R.thr)} sn`;
+  if (m.cur){ const cc = m.cur.c; line = `${CAT_NAME[cc.cat]}${cc.cat==='reject' && cc.rej ? ` · ${cc.rej} adet` : ''}${cc.note ? ' · '+cc.note : ' · yorum yok'}`; c.fillStyle = PC.text; }
+  else c.fillStyle = PC.muted;
+  c.fillText(ellipsize(c, line, W-2*pad), pad, y);
+  // row 3: strip
+  y += 20*u; const sx = pad, sw = W-2*pad, shh = 34*u, total = Math.max(S.totalDur||R.T, R.T);
+  c.fillStyle = PC.pend; rrect(c, sx, y, sw, shh, 5*u); c.fill();
+  c.save(); rrect(c, sx, y, sw, shh, 5*u); c.clip();
+  c.fillStyle = PC.run; c.fillRect(sx, y, sw*R.T/total, shh);
+  for (const st of R.stops){ c.fillStyle = st.c && st.c.cat==='reject' ? PC.rej : PC.stop; c.fillRect(sx + sw*st.start/total, y, Math.max(3*u, sw*st.dur/total), shh); }
+  c.restore();
+  const px = sx + sw*Math.min(t,total)/total;
+  c.fillStyle = '#fff'; c.fillRect(px-1.5*u, y-5*u, 3*u, shh+10*u);
+  c.font = `400 ${16*u}px ${mono}`; c.fillStyle = PC.muted; c.textBaseline = 'top';
+  c.fillText('0:00', sx, y+shh+5*u); c.textAlign='right'; c.fillText(fmt(total), sx+sw, y+shh+5*u); c.textAlign='left';
+  // row 4: live metrics
+  y += shh + 32*u; const gap = 8*u, bw = (W-2*pad-3*gap)/4, bh = H - y - 12*u;
+  const boxes = [['OEE', m.pOee, PC.run], ['HIZ KAYBI', m.pSpd, PC.spd], ['KALİTE K.', m.pQ, PC.rejText], ['DURUŞ', m.pStop, PC.stop]];
+  boxes.forEach(([k,v,col],i) => {
+    const bx = pad + i*(bw+gap);
+    c.fillStyle = PC.box; rrect(c, bx, y, bw, bh, 6*u); c.fill();
+    c.fillStyle = col; c.fillRect(bx, y, 4*u, bh);
+    c.fillStyle = PC.muted; c.font = `600 ${16*u}px ${body}`; c.textBaseline = 'top'; c.fillText(k, bx+12*u, y+10*u);
+    c.fillStyle = col; c.font = `700 ${44*u}px ${disp}`; c.textBaseline = 'alphabetic'; c.fillText(`%${nf1.format(v*100)}`, bx+12*u, y+bh-12*u);
+  });
+  c.textBaseline = 'alphabetic';
+}
+function drawPlayer(){
+  if (!S.res || PLAY.exporting) return;
+  if (S.source === 'demo'){ if (!S.scanning){ drawDemo(PLAY.t); drawComposite(PLAY.t, demoCanvas); } }
+  else drawComposite(PLAY.t, vid.readyState >= 2 ? vid : null);
+  $('seek').value = PLAY.t.toFixed(1); $('seekOut').textContent = fmt(PLAY.t);
+  placePlayhead();
+}
+function placePlayhead(){
+  const R = S.res, ph = $('playhead'); if (!R){ ph.hidden = true; return; }
+  const total = Math.max(S.totalDur||R.T, R.T) || 1; ph.hidden = false;
+  ph.style.left = (Math.min(PLAY.t,total)/total*100).toFixed(3)+'%';
+}
+function setPlayUI(on){ $('playLbl').textContent = on ? 'Duraklat' : 'Oynat'; $('playIcon').setAttribute('d', on ? 'M7 5h4v14H7zM13 5h4v14h-4z' : 'M7 5v14l12-7z'); $('playBtn').setAttribute('aria-label', on ? 'Duraklat' : 'Oynat'); }
+function pausePlayer(){ if (!PLAY.playing) return; PLAY.playing = false; cancelAnimationFrame(PLAY.raf); if (S.source==='video') vid.pause(); setPlayUI(false); }
+async function playPlayer(){
+  if (!S.res || S.scanning || PLAY.exporting) return;
+  const T = S.res.T; if (PLAY.t >= T - 0.05) PLAY.t = 0;
+  PLAY.playing = true; setPlayUI(true);
+  if (S.source === 'demo'){
+    PLAY.last = performance.now();
+    const loop = now => { if (!PLAY.playing) return; PLAY.t = Math.min(T, PLAY.t + (now-PLAY.last)/1000); PLAY.last = now; drawPlayer(); if (PLAY.t >= T){ pausePlayer(); return; } PLAY.raf = requestAnimationFrame(loop); };
+    PLAY.raf = requestAnimationFrame(loop);
+  } else {
+    vid.playbackRate = 1; vid.onended = () => { PLAY.t = T; drawPlayer(); pausePlayer(); };
+    if (Math.abs(vid.currentTime - PLAY.t) > 0.2) await seekTo(PLAY.t);
+    const tick = (now, meta) => { if (!PLAY.playing) return; PLAY.t = meta ? meta.mediaTime : vid.currentTime; drawPlayer(); schedule(); };
+    const schedule = () => { if ('requestVideoFrameCallback' in vid) vid.requestVideoFrameCallback(tick); else PLAY.raf = requestAnimationFrame(() => tick(0, null)); };
+    schedule();
+    try { await vid.play(); } catch(e){ pausePlayer(); }
+  }
+}
+async function seekPlayer(t){
+  if (!S.res || PLAY.exporting) return;
+  const was = PLAY.playing; pausePlayer();
+  PLAY.t = Math.max(0, Math.min(t, S.res.T));
+  if (S.source === 'video' && vid.readyState >= 1){ await seekTo(PLAY.t); }
+  drawPlayer();
+  if (was) playPlayer();
+}
+$('playBtn').addEventListener('click', () => PLAY.playing ? pausePlayer() : playPlayer());
+let seekTimer; $('seek').addEventListener('input', e => { const t = +e.target.value; PLAY.t = t; $('seekOut').textContent = fmt(t); placePlayhead(); clearTimeout(seekTimer); seekTimer = setTimeout(() => seekPlayer(t), 60); });
+$('strip').addEventListener('click', e => { if (!S.res) return; const b = $('strip').getBoundingClientRect(); const total = Math.max(S.totalDur||S.res.T, S.res.T); seekPlayer((e.clientX-b.left)/b.width*total); });
+
+// ---------- saving files: Android app (Capacitor) or claude.ai downloads ----------
+let downloads = null;
+const isNative = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+function b64(bytes){ let s = ''; for (let i=0;i<bytes.length;i+=0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i+0x8000)); return btoa(s); }
+async function saveFile(name, blob){
+  if (isNative()){
+    const C = window.Capacitor, Filesystem = (C.Plugins && C.Plugins.Filesystem) || C.registerPlugin('Filesystem'), Share = (C.Plugins && C.Plugins.Share) || C.registerPlugin('Share');
+    const bytes = new Uint8Array(await blob.arrayBuffer()), CH = 3*1024*1024;
+    for (let off=0; off<bytes.length || off===0; off+=CH){
+      const data = b64(bytes.subarray(off, off+CH));
+      if (off === 0) await Filesystem.writeFile({path:name, data, directory:'CACHE'});
+      else await Filesystem.appendFile({path:name, data, directory:'CACHE'});
+      if (bytes.length === 0) break;
+    }
+    const {uri} = await Filesystem.getUri({path:name, directory:'CACHE'});
+    await Share.share({title:name, files:[uri]});
+    return true;
+  }
+  if (!downloads) throw {code:'unavailable'};
+  await downloads.save({filename:name, data: blob});
+  return true;
+}
+function stamp(){ const d = new Date(), z = n => String(n).padStart(2,'0'); return `${d.getFullYear()}${z(d.getMonth()+1)}${z(d.getDate())}-${z(d.getHours())}${z(d.getMinutes())}`; }
+function expMsg(m, err){ const e = $('expStatus'); e.textContent = m || ''; e.style.color = err ? 'var(--stop)' : ''; }
+
+// ---------- Excel ----------
+function buildWorkbook(){
+  const R = S.res, O = S.oee, X = window.XLSX, r1 = v => Math.round(v*10)/10;
+  const wb = X.utils.book_new();
+  const ozet = [['Metrik','Değer','Birim'],
+    ['Kaynak', S.source==='demo' ? 'Simülasyon (örnek)' : S.fileName, ''],
+    ['Nominal hız', R.V, 'adet/dk'], ['Çevrim süresi', r1(R.cycle*100)/100, 'sn'], ['Duruş eşiği', r1(R.thr), 'sn'],
+    ['Kayıt süresi', r1(R.T), 'sn'], ['Çalışma süresi', r1(R.runT), 'sn'], ['Duruş süresi', r1(R.stopT), 'sn'], ['Duruş sayısı', R.stops.length, 'adet'],
+    ['Toplam adet', R.N, 'adet'], ['Reject', O.rej, 'adet'], ['Sağlam', O.good, 'adet'], ['Gerçek hız (çalışırken)', r1(R.speed), 'adet/dk'],
+    [], ['OEE', r1(O.pOee*100), '%'], ['Hız kaybı', r1(O.pSpd*100), '%'], ['Kalite kaybı', r1(O.pQ*100), '%'], ['Duruş', r1(O.pStop*100), '%'],
+    [], ['Kullanılabilirlik (K)', r1(O.A*100), '%'], ['Performans (P)', r1(O.Pf*100), '%'], ['Kalite (Q)', r1(O.Q*100), '%']];
+  const ws1 = X.utils.aoa_to_sheet(ozet); ws1['!cols'] = [{wch:26},{wch:22},{wch:10}];
+  X.utils.book_append_sheet(wb, ws1, 'Özet');
+  const dur = [['No','Başlangıç','Bitiş','Başlangıç (sn)','Bitiş (sn)','Süre (sn)','Tür','Reject adedi','Yorum']];
+  R.stops.forEach((s,i) => dur.push([i+1, fmt(s.start), fmt(s.end), r1(s.start), r1(s.end), r1(s.dur), CAT_NAME[s.c.cat], s.c.cat==='reject' ? (+s.c.rej||0) : 0, s.c.note||'']));
+  const ws2 = X.utils.aoa_to_sheet(dur); ws2['!cols'] = [{wch:5},{wch:10},{wch:10},{wch:14},{wch:12},{wch:10},{wch:10},{wch:12},{wch:44}];
+  X.utils.book_append_sheet(wb, ws2, 'Duruşlar');
+  const sec = [['Saniye','Zaman','Durum','Kümülatif adet','Kümülatif reject','OEE %','Hız kaybı %','Kalite kaybı %','Duruş %']];
+  for (let t=1; t<=Math.ceil(R.T); t++){
+    const tt = Math.min(t, R.T), m = cumAt(tt), mid = cumAt(Math.max(0, tt-0.5));
+    const state = mid.cur ? (mid.cur.c && mid.cur.c.cat==='reject' ? 'Reject' : 'Duruş') : 'Çalışıyor';
+    sec.push([t, fmt(tt), state, m.N, Math.round(m.rej*10)/10, r1(m.pOee*100), r1(m.pSpd*100), r1(m.pQ*100), r1(m.pStop*100)]);
+  }
+  const ws3 = X.utils.aoa_to_sheet(sec); ws3['!cols'] = [{wch:8},{wch:8},{wch:11},{wch:15},{wch:16},{wch:8},{wch:12},{wch:14},{wch:9}];
+  X.utils.book_append_sheet(wb, ws3, 'Saniye bazlı');
+  const urun = [['No','Zaman (sn)']]; R.counts.forEach((c,i) => urun.push([i+1, Math.round(c*100)/100]));
+  X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet(urun), 'Ürünler');
+  return wb;
+}
+$('xlsxBtn').addEventListener('click', async () => {
+  if (!S.res) return;
+  if (!window.XLSX){ expMsg('Excel kütüphanesi yüklenemedi. İnternet bağlantısını kontrol edip sayfayı yenileyin.', true); return; }
+  try {
+    const out = window.XLSX.write(buildWorkbook(), {bookType:'xlsx', type:'array'});
+    await saveFile(`hat-olcumu-${stamp()}.xlsx`, new Blob([out], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    expMsg('Excel hazır.');
+  } catch(e){ if (!e || e.code !== 'declined') expMsg('Excel kaydedilemedi.', true); }
+});
+
+// ---------- video export (renders the composite in real time) ----------
+function pickMime(){
+  if (!window.MediaRecorder) return null;
+  for (const m of ['video/mp4;codecs=avc1.42E01E','video/mp4','video/webm;codecs=vp9','video/webm;codecs=vp8','video/webm']) { try { if (MediaRecorder.isTypeSupported(m)) return m; } catch(e){} }
+  return null;
+}
+$('videoBtn').addEventListener('click', async () => {
+  if (!S.res || S.scanning) return;
+  if (PLAY.exporting){ PLAY.cancelExport = true; return; }
+  const mime = pickMime();
+  if (!mime || !pl.captureStream){ expMsg('Bu cihaz video kaydını desteklemiyor.', true); return; }
+  pausePlayer(); PLAY.exporting = true; PLAY.cancelExport = false;
+  $('videoBtn').textContent = 'Video kaydını durdur'; $('playBtn').disabled = true;
+  await keepAwake(true);
+  const T = S.res.T, chunks = [];
+  const rec = new MediaRecorder(pl.captureStream(30), {mimeType: mime, videoBitsPerSecond: 4000000});
+  rec.ondataavailable = e => { if (e.data && e.data.size) chunks.push(e.data); };
+  const stopped = new Promise(res => rec.onstop = res);
+  const frame = t => { drawComposite(t, S.source==='demo' ? (drawDemo(t), demoCanvas) : vid); expMsg(`Video hazırlanıyor… ${fmt(t)} / ${fmt(T)} (gerçek zamanlı)`); PLAY.t = t; placePlayhead(); };
+  if (S.source === 'demo'){
+    frame(0); rec.start(1000);
+    const start = performance.now();
+    await new Promise(done => { const loop = now => { const t = Math.min(T, (now-start)/1000); frame(t); if (t >= T || PLAY.cancelExport) return done(); requestAnimationFrame(loop); }; requestAnimationFrame(loop); });
+  } else {
+    await seekTo(0); frame(0); rec.start(1000);
+    vid.playbackRate = 1;
+    await new Promise(async done => {
+      vid.onended = done;
+      const cb = (now, meta) => { if (PLAY.cancelExport){ vid.pause(); return done(); } frame(meta.mediaTime); vid.requestVideoFrameCallback(cb); };
+      if ('requestVideoFrameCallback' in vid) vid.requestVideoFrameCallback(cb);
+      else { const loop = () => { if (PLAY.cancelExport || vid.ended){ vid.pause(); return done(); } frame(vid.currentTime); requestAnimationFrame(loop); }; requestAnimationFrame(loop); }
+      try { await vid.play(); } catch(e){ done(); }
+    });
+  }
+  rec.stop(); await stopped; await keepAwake(false);
+  PLAY.exporting = false; $('videoBtn').textContent = 'Video indir'; $('playBtn').disabled = false;
+  if (PLAY.cancelExport){ expMsg('Video kaydı durduruldu.'); drawPlayer(); return; }
+  const blob = new Blob(chunks, {type: mime.split(';')[0]}), ext = mime.includes('mp4') ? 'mp4' : 'webm';
+  try { await saveFile(`hat-olcumu-${stamp()}.${ext}`, blob); expMsg(`Video hazır (${(blob.size/1048576).toFixed(1)} MB, ${ext.toUpperCase()}).`); }
+  catch(e){ if (!e || e.code !== 'declined') expMsg('Video kaydedilemedi.', true); }
+  drawPlayer();
+});
+
+(async () => {
+  if (!isNative()){
+    try { downloads = window.claude && window.claude.use ? await window.claude.use('downloads') : null; } catch(e){ downloads = null; }
+  }
+  const can = isNative() || !!downloads;
+  $('xlsxBtn').hidden = !can; $('videoBtn').hidden = !can || !pickMime();
+})();
+
+// ---------- boot ----------
+showParams();
+sizePreview(DEMO.W*2, DEMO.H*2);
+drawDemo(0); drawPreview(demoCanvas);
+requestAnimationFrame(demoLoop);
+startDemo();
+})();
+</script>
+
+</body></html>

@@ -1,0 +1,6 @@
+{
+  "appId": "com.berkay.hathizsayaci",
+  "appName": "Hat Hız Sayacı",
+  "webDir": "www",
+  "android": { "allowMixedContent": false }
+}
